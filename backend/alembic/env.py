@@ -59,6 +59,35 @@ def run_migrations_offline() -> None:
         context.run_migrations()
 
 
+def include_object(object, name, type_, reflected, compare_to):
+    """
+    Filter function to exclude Keycloak tables from Alembic autogenerate.
+
+    UTIP and Keycloak share the same PostgreSQL database. We only want to
+    manage UTIP's tables (threat_reports, extracted_techniques, etc.), not
+    Keycloak's internal schema.
+    """
+    # List of UTIP tables we manage
+    utip_tables = {
+        'threat_reports',
+        'extracted_techniques',
+        'vulnerability_scans',
+        'vulnerabilities',
+        'cve_techniques',
+        'layers',
+        'layer_techniques',
+        'threat_actors',
+        'actor_techniques',
+        'alembic_version',  # Alembic's own version tracking table
+    }
+
+    if type_ == "table":
+        # Only include UTIP tables, ignore everything else (especially Keycloak tables)
+        return name in utip_tables
+
+    return True
+
+
 def run_migrations_online() -> None:
     """Run migrations in 'online' mode.
 
@@ -74,7 +103,9 @@ def run_migrations_online() -> None:
 
     with connectable.connect() as connection:
         context.configure(
-            connection=connection, target_metadata=target_metadata
+            connection=connection,
+            target_metadata=target_metadata,
+            include_object=include_object,
         )
 
         with context.begin_transaction():
