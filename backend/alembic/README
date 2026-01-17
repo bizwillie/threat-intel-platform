@@ -1,0 +1,19 @@
+UTIP Database Migrations
+
+This directory contains Alembic migrations for the UTIP database schema.
+
+Usage:
+  # Create new migration
+  alembic revision --autogenerate -m "Description"
+
+  # Apply migrations
+  alembic upgrade head
+
+  # Rollback one migration
+  alembic downgrade -1
+
+  # Show current version
+  alembic current
+
+  # Show migration history
+  alembic history

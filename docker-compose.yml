@@ -1,0 +1,124 @@
+version: '3.8'
+
+services:
+  # PostgreSQL - System of Record
+  postgres:
+    image: postgres:15-alpine
+    container_name: utip-postgres
+    environment:
+      POSTGRES_USER: utip
+      POSTGRES_PASSWORD: utip_password
+      POSTGRES_DB: utip
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U utip"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - utip-network
+
+  # Redis - Async Task Queue
+  redis:
+    image: redis:7-alpine
+    container_name: utip-redis
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - utip-network
+
+  # Keycloak - Identity Provider
+  keycloak:
+    image: quay.io/keycloak/keycloak:23.0
+    container_name: utip-keycloak
+    environment:
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak
+      KC_DB_USERNAME: utip
+      KC_DB_PASSWORD: utip_password
+      KC_HOSTNAME_STRICT: "false"
+      KC_HTTP_ENABLED: "true"
+      KC_PROXY: edge
+    command:
+      - start-dev
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8080/health/ready || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    networks:
+      - utip-network
+
+  # Core API - "The Brain"
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: utip-backend
+    environment:
+      DATABASE_URL: postgresql://utip:utip_password@postgres:5432/utip
+      REDIS_URL: redis://redis:6379/0
+      KEYCLOAK_URL: http://keycloak:8080
+      KEYCLOAK_REALM: utip
+      KEYCLOAK_CLIENT_ID: utip-api
+      API_HOST: 0.0.0.0
+      API_PORT: 8000
+      ENVIRONMENT: development
+      DEBUG: "True"
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend:/app
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      keycloak:
+        condition: service_healthy
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    networks:
+      - utip-network
+
+  # Intel Worker - "The Hunter" (Phase 3)
+  # Commented out until Phase 3
+  # worker:
+  #   build:
+  #     context: ./worker
+  #     dockerfile: Dockerfile
+  #   container_name: utip-worker
+  #   environment:
+  #     DATABASE_URL: postgresql://utip:utip_password@postgres:5432/utip
+  #     REDIS_URL: redis://redis:6379/0
+  #   volumes:
+  #     - ./worker:/app
+  #   depends_on:
+  #     - postgres
+  #     - redis
+  #   command: celery -A tasks worker --loglevel=info
+  #   networks:
+  #     - utip-network
+
+volumes:
+  postgres-data:
+    driver: local
+
+networks:
+  utip-network:
+    driver: bridge
