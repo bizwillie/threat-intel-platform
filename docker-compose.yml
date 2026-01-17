@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   # PostgreSQL - System of Record
   postgres:
@@ -43,7 +41,7 @@ services:
       KEYCLOAK_ADMIN: admin
       KEYCLOAK_ADMIN_PASSWORD: admin
       KC_DB: postgres
-      KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak
+      KC_DB_URL: jdbc:postgresql://postgres:5432/utip
       KC_DB_USERNAME: utip
       KC_DB_PASSWORD: utip_password
       KC_HOSTNAME_STRICT: "false"
@@ -57,7 +55,7 @@ services:
       postgres:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:8080/health/ready || exit 1"]
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/localhost/8080 || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 5
