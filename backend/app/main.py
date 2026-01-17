@@ -15,6 +15,9 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 import logging
 
+# Import routers
+from app.routes import health_router, intel_router, vuln_router, layer_router
+
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
@@ -30,6 +33,12 @@ app = FastAPI(
     docs_url="/docs",
     redoc_url="/redoc"
 )
+
+# Include routers
+app.include_router(health_router)
+app.include_router(intel_router)
+app.include_router(vuln_router)
+app.include_router(layer_router)
 
 # CORS configuration
 app.add_middleware(
