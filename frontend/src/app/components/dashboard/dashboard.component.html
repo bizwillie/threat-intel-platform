@@ -1,0 +1,159 @@
+<div class="dashboard-container">
+  <!-- Top Navigation Bar -->
+  <div class="top-bar">
+    <div class="top-bar-left">
+      <h1 class="app-title">UTIP</h1>
+      <span class="classification-label">INTERNAL USE ONLY</span>
+    </div>
+
+    <div class="top-bar-center">
+      <span class="page-title">Dashboard</span>
+    </div>
+
+    <div class="top-bar-right">
+      <button class="btn-icon" (click)="openNavigator()" title="ATT&CK Navigator">
+        <span class="icon">🗺️</span>
+        <span class="btn-label">Navigator</span>
+      </button>
+      <button class="btn-icon" title="Upload Intel" disabled>
+        <span class="icon">📄</span>
+        <span class="btn-label">Intel</span>
+      </button>
+      <button class="btn-icon" title="Upload Scan" disabled>
+        <span class="icon">🔍</span>
+        <span class="btn-label">Scans</span>
+      </button>
+      <button class="btn-icon" (click)="logout()" title="Logout">
+        <span class="icon">🚪</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- Main Content -->
+  <div class="dashboard-content">
+    <!-- Welcome Section -->
+    <div class="welcome-section glass-card">
+      <h2>Welcome to UTIP</h2>
+      <p class="text-secondary">
+        Unified Threat Intelligence Platform - Mission-Critical Cybersecurity Fusion
+      </p>
+      <p class="user-greeting" *ngIf="currentUser$ | async as user">
+        Logged in as: <strong>{{ user.username }}</strong>
+      </p>
+    </div>
+
+    <!-- Statistics Cards -->
+    <div class="stats-grid">
+      <div class="stat-card glass-card">
+        <div class="stat-icon">🗺️</div>
+        <div class="stat-info">
+          <div class="stat-value">{{ stats.totalLayers }}</div>
+          <div class="stat-label">ATT&CK Layers</div>
+        </div>
+      </div>
+
+      <div class="stat-card glass-card">
+        <div class="stat-icon">📄</div>
+        <div class="stat-info">
+          <div class="stat-value">{{ stats.totalReports }}</div>
+          <div class="stat-label">Threat Reports</div>
+        </div>
+      </div>
+
+      <div class="stat-card glass-card">
+        <div class="stat-icon">🔍</div>
+        <div class="stat-info">
+          <div class="stat-value">{{ stats.totalScans }}</div>
+          <div class="stat-label">Vulnerability Scans</div>
+        </div>
+      </div>
+
+      <div class="stat-card glass-card">
+        <div class="stat-icon">🎯</div>
+        <div class="stat-info">
+          <div class="stat-value">{{ stats.criticalTechniques }}</div>
+          <div class="stat-label">Critical Techniques</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Recent Layers Section -->
+    <div class="recent-section">
+      <h3>Recent ATT&CK Layers</h3>
+
+      <div class="loading-indicator" *ngIf="loading">
+        <div class="spinner"></div>
+        <p>Loading layers...</p>
+      </div>
+
+      <div class="layers-grid" *ngIf="!loading && recentLayers.length > 0">
+        <div
+          *ngFor="let layer of recentLayers"
+          class="layer-card glass-card"
+          (click)="openLayer(layer.id)"
+        >
+          <h4>{{ layer.name }}</h4>
+          <p class="layer-meta text-secondary">
+            Created: {{ layer.created_at | date:'short' }}
+          </p>
+          <p class="layer-meta text-secondary">
+            By: {{ layer.created_by }}
+          </p>
+          <div class="layer-actions">
+            <button class="btn-small">Open</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="empty-state" *ngIf="!loading && recentLayers.length === 0">
+        <p class="text-secondary">No layers created yet.</p>
+        <p class="text-tertiary">Generate a layer from threat intel and vulnerability scans to get started.</p>
+      </div>
+    </div>
+
+    <!-- Quick Actions -->
+    <div class="quick-actions">
+      <h3>Quick Actions</h3>
+      <div class="actions-grid">
+        <button class="action-card glass-card" (click)="openNavigator()">
+          <div class="action-icon">🗺️</div>
+          <div class="action-title">Open Navigator</div>
+          <div class="action-description text-secondary">
+            View and analyze ATT&CK layers
+          </div>
+        </button>
+
+        <button class="action-card glass-card" disabled>
+          <div class="action-icon">➕</div>
+          <div class="action-title">Generate Layer</div>
+          <div class="action-description text-secondary">
+            Create new layer from intel and vulns
+          </div>
+        </button>
+
+        <button class="action-card glass-card" disabled>
+          <div class="action-icon">📄</div>
+          <div class="action-title">Upload Intel</div>
+          <div class="action-description text-secondary">
+            Upload threat intelligence reports
+          </div>
+        </button>
+
+        <button class="action-card glass-card" disabled>
+          <div class="action-icon">🔍</div>
+          <div class="action-title">Upload Scan</div>
+          <div class="action-description text-secondary">
+            Upload vulnerability scan results
+          </div>
+        </button>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <div class="dashboard-footer">
+      <p class="text-tertiary font-mono">
+        Theme: Midnight Vulture | Classification: INTERNAL USE ONLY | UTIP v1.0.0
+      </p>
+    </div>
+  </div>
+</div>

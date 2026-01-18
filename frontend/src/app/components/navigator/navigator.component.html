@@ -12,11 +12,17 @@
     </div>
 
     <div class="top-bar-right">
+      <button class="btn-icon" (click)="goToDashboard()" title="Back to Dashboard">
+        <span class="icon">🏠</span>
+        <span class="btn-label">Home</span>
+      </button>
       <button class="btn-icon" (click)="toggleAttributionPanel()" title="Threat Actor Attribution">
         <span class="icon">🎯</span>
+        <span class="btn-label">Attribution</span>
       </button>
       <button class="btn-icon" (click)="toggleRemediationSidebar()" title="Remediation Guidance">
         <span class="icon">🛡️</span>
+        <span class="btn-label">Remediation</span>
       </button>
       <button class="btn-icon" (click)="logout()" title="Logout">
         <span class="icon">🚪</span>

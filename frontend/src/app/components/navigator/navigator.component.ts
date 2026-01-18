@@ -105,6 +105,10 @@ export class NavigatorComponent implements OnInit {
     this.showAttributionPanel = false;
   }
 
+  goToDashboard(): void {
+    this.router.navigate(['/dashboard']);
+  }
+
   logout(): void {
     this.authService.logout();
     this.router.navigate(['/login']);

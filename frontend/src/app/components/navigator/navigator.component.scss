@@ -64,6 +64,9 @@
 }
 
 .btn-icon {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
   background: var(--color-surface-elevated);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
@@ -74,6 +77,11 @@
 
   .icon {
     font-size: 1.25rem;
+  }
+
+  .btn-label {
+    font-size: 0.875rem;
+    font-weight: 500;
   }
 
   &:hover {
