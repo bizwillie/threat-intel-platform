@@ -15,7 +15,7 @@ from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import get_current_user, require_hunter, User
-from app.models.database import get_db
+from app.database import get_db
 from app.schemas.intel import (
     ThreatReportUploadResponse,
     ThreatReport,
