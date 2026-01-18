@@ -16,7 +16,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import logging
 
 # Import routers
-from app.routes import health_router, intel_router, vuln_router, layer_router
+from app.routes import health_router, intel_router, vuln_router, layer_router, attribution_router
 
 # Configure logging
 logging.basicConfig(
@@ -39,6 +39,7 @@ app.include_router(health_router)
 app.include_router(intel_router)
 app.include_router(vuln_router)
 app.include_router(layer_router)
+app.include_router(attribution_router)
 
 # CORS configuration
 app.add_middleware(

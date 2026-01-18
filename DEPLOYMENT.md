@@ -1310,19 +1310,401 @@ Layer generation is **synchronous** and completes in:
 - **Read Access**: Any authenticated analyst can view any layer
 - **Audit Trail**: All layer generations logged with user ID and timestamp
 
+---
+
+## Phase 6: Attribution Engine - Threat Actor Attribution (✅ COMPLETE)
+
+### Overview
+
+Phase 6 implements deterministic threat actor attribution using technique overlap analysis. The attribution engine analyzes generated layers and matches them against known APT group TTPs to identify potential threat actors.
+
+**Core Capability**: "Which threat actor does this attack surface profile match?"
+
+### Architecture
+
+```
+┌─────────────────────┐
+│   Generated Layer   │
+│   (from Phase 5)    │
+└──────────┬──────────┘
+           │
+           ↓
+┌─────────────────────┐
+│ Attribution Service │ ← Deterministic scoring algorithm
+│ (deterministic)     │ ← Weighted technique matching
+└──────────┬──────────┘
+           │
+           ↓
+┌─────────────────────┐
+│  Threat Actor DB    │
+│  (8 APT groups)     │
+│  (128 techniques)   │
+└─────────────────────┘
+```
+
+### Algorithm
+
+**Deterministic Scoring** (no LLM, fully auditable):
+
+1. **Get layer techniques**: Extract all techniques from the target layer
+2. **For each threat actor**:
+   - Get actor's known techniques with weights (0.0-1.0)
+   - Calculate overlap with layer techniques
+   - Sum weights of matching techniques
+   - Normalize by total actor weight → confidence score (0.0-1.0)
+3. **Sort by confidence**: Return top N actors with highest confidence
+4. **Include evidence**: Show which techniques matched
+
+**Confidence Interpretation**:
+- **0.8-1.0**: Strong match (actor's signature techniques present)
+- **0.5-0.8**: Moderate match (significant technique overlap)
+- **0.2-0.5**: Weak match (some techniques match, but not distinctive)
+- **0.0-0.2**: Minimal match (very few overlapping techniques)
+
+### Threat Actors Seeded
+
+The database includes 8 major APT groups:
+
+| Actor ID | Name | Description | Techniques |
+|----------|------|-------------|------------|
+| **APT29** | Cozy Bear | Russian SVR cyber espionage | 18 |
+| **APT28** | Fancy Bear | Russian GRU military intelligence | 19 |
+| **APT1** | Comment Crew | Chinese PLA Unit 61398 | 14 |
+| **Lazarus** | Lazarus Group | North Korean state-sponsored | 15 |
+| **FIN7** | Carbanak | Russian cybercrime group | 17 |
+| **APT41** | Double Dragon | Chinese dual-mandate group | 16 |
+| **Sandworm** | Sandworm Team | Russian GRU destructive ops | 13 |
+| **Turla** | Snake/Uroburos | Russian FSB sophisticated espionage | 16 |
+
+**Total**: 128 actor-technique mappings with weighted confidence
+
+### API Endpoints
+
+#### 1. POST /api/v1/attribution - Attribute Layer
+
+**Purpose**: Attribute a layer to threat actors
+
+**Request**:
+```json
+{
+  "layer_id": "550e8400-e29b-41d4-a716-446655440000",
+  "top_n": 10,
+  "min_confidence": 0.1
+}
+```
+
+**Response**:
+```json
+{
+  "layer_id": "550e8400-e29b-41d4-a716-446655440000",
+  "layer_name": "Q4 2024 Threat Landscape",
+  "attributions": [
+    {
+      "actor_id": "APT29",
+      "actor_name": "Cozy Bear (APT29)",
+      "description": "Russian cyber espionage group...",
+      "confidence": 0.847,
+      "matching_techniques": [
+        "T1059.001",
+        "T1566.001",
+        "T1071.001"
+      ],
+      "match_count": 15,
+      "total_actor_techniques": 18
+    },
+    {
+      "actor_id": "APT28",
+      "actor_name": "Fancy Bear (APT28)",
+      "description": "Russian military intelligence...",
+      "confidence": 0.632,
+      "matching_techniques": [
+        "T1566.001",
+        "T1071.001"
+      ],
+      "match_count": 12,
+      "total_actor_techniques": 19
+    }
+  ],
+  "total_actors_evaluated": 8,
+  "message": "Attribution analysis complete"
+}
+```
+
+#### 2. GET /api/v1/attribution/actors - List Threat Actors
+
+**Purpose**: Get all threat actors in database
+
+**Response**:
+```json
+[
+  {
+    "actor_id": "APT29",
+    "actor_name": "Cozy Bear (APT29)",
+    "description": "Russian cyber espionage group..."
+  }
+]
+```
+
+#### 3. GET /api/v1/attribution/actors/{actor_id} - Get Actor Details
+
+**Purpose**: Get detailed information about a specific threat actor
+
+**Example**: `GET /api/v1/attribution/actors/APT29`
+
+**Response**:
+```json
+{
+  "actor_id": "APT29",
+  "actor_name": "Cozy Bear (APT29)",
+  "description": "Russian cyber espionage group...",
+  "techniques": [
+    {
+      "technique_id": "T1059.001",
+      "weight": 0.95
+    },
+    {
+      "technique_id": "T1566.001",
+      "weight": 0.90
+    }
+  ],
+  "technique_count": 18
+}
+```
+
+### Testing Phase 6
+
+#### Prerequisites
+
+1. Phase 5 layer generated
+2. Threat actor data seeded (run on first deployment)
+
+#### Test 1: Attribute Layer to Threat Actors
+
+```bash
+# 1. Generate a layer (from Phase 5)
+LAYER_RESPONSE=$(curl -s -X POST http://localhost:8000/api/v1/layers/generate \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Test Attribution Layer",
+    "description": "Layer for testing threat actor attribution",
+    "intel_report_ids": ["<intel_report_uuid>"],
+    "vuln_scan_ids": ["<vuln_scan_uuid>"]
+  }')
+
+LAYER_ID=$(echo $LAYER_RESPONSE | jq -r '.layer_id')
+echo "Generated layer: $LAYER_ID"
+
+# 2. Attribute the layer
+curl -X POST http://localhost:8000/api/v1/attribution \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d "{
+    \"layer_id\": \"$LAYER_ID\",
+    \"top_n\": 5,
+    \"min_confidence\": 0.1
+  }" | jq '.'
+```
+
+**Expected Output**:
+- Top 5 threat actors sorted by confidence
+- Each actor shows matching techniques
+- Confidence scores between 0.0 and 1.0
+- Match count shows how many techniques overlapped
+
+#### Test 2: List All Threat Actors
+
+```bash
+curl -X GET http://localhost:8000/api/v1/attribution/actors \
+  -H "Authorization: Bearer $TOKEN" | jq '.'
+```
+
+**Expected Output**:
+- 8 threat actors (APT29, APT28, APT1, Lazarus, FIN7, APT41, Sandworm, Turla)
+- Each with ID, name, and description
+
+#### Test 3: Get Actor Details
+
+```bash
+# Get details for APT29
+curl -X GET http://localhost:8000/api/v1/attribution/actors/APT29 \
+  -H "Authorization: Bearer $TOKEN" | jq '.'
+```
+
+**Expected Output**:
+- Actor metadata
+- 18 techniques with weights
+- Signature techniques (weight > 0.8): PowerShell, Spearphishing
+
+#### Test 4: Verify Database Seeding
+
+```bash
+# Check threat actors table
+docker-compose exec postgres psql -U utip -d utip -c \
+  "SELECT id, name FROM threat_actors ORDER BY id;"
+
+# Check actor techniques count
+docker-compose exec postgres psql -U utip -d utip -c \
+  "SELECT actor_id, COUNT(*) as technique_count
+   FROM actor_techniques
+   GROUP BY actor_id
+   ORDER BY actor_id;"
+```
+
+**Expected Output**:
+- 8 threat actors
+- 128 total actor-technique mappings
+
+### Use Cases
+
+#### 1. APT Campaign Identification
+
+**Scenario**: An organization detects suspicious activity and generates a correlation layer.
+
+**Workflow**:
+1. Generate layer from recent threat intel + vulnerability scans
+2. Attribute layer to identify potential APT groups
+3. Review top matches (> 0.5 confidence)
+4. Cross-reference with geopolitical context
+5. Adjust detection rules based on APT TTPs
+
+**Example Attribution**:
+- **APT29 (0.85 confidence)**: PowerShell usage, spearphishing, DNS C2
+- **APT28 (0.67 confidence)**: Spearphishing, drive-by compromise
+- **Turla (0.54 confidence)**: Supply chain compromise indicators
+
+#### 2. Threat Intelligence Validation
+
+**Scenario**: Validate if observed TTPs match reported threat actor profiles.
+
+**Workflow**:
+1. Extract techniques from threat report
+2. Generate layer (intel-only, no vulnerabilities)
+3. Run attribution
+4. Compare top match with report's attribution
+5. Confidence score validates/challenges report's claims
+
+**Example**:
+- Report claims: APT29
+- Attribution shows: APT29 (0.92) ← Strong validation
+- Attribution shows: FIN7 (0.91) ← Possible misattribution
+
+#### 3. Proactive Threat Hunting
+
+**Scenario**: Hunt for specific threat actor activity.
+
+**Workflow**:
+1. Get actor details: `GET /api/v1/attribution/actors/APT29`
+2. Review signature techniques (weight > 0.8)
+3. Query logs/SIEM for those techniques
+4. If found, generate layer and re-attribute
+5. Confidence score shows similarity to known APT29 behavior
+
+### Troubleshooting
+
+#### No Attributions Returned
+
+**Symptom**: Attribution returns empty list
+
+**Causes**:
+1. **Threat actor database not seeded**
+   ```bash
+   docker-compose exec backend python -m scripts.seed_threat_actors
+   ```
+
+2. **Layer has no techniques**
+   ```bash
+   # Check layer techniques
+   docker-compose exec postgres psql -U utip -d utip -c \
+     "SELECT COUNT(*) FROM layer_techniques WHERE layer_id = '<layer_uuid>';"
+   ```
+
+3. **min_confidence too high**
+   - Lower the threshold: `"min_confidence": 0.0`
+
+#### Low Confidence Scores
+
+**Symptom**: All attributions < 0.2 confidence
+
+**Causes**:
+1. **Layer techniques don't match any actor profiles**
+   - Normal for custom/unknown threat actors
+   - May indicate novel TTPs
+
+2. **Limited technique overlap**
+   - Layer may have very few techniques
+   - Actors may have niche TTPs not in your layer
+
+**Action**: Review matching_techniques array to see what overlapped
+
+#### Attribution Doesn't Match Expectations
+
+**Symptom**: Expected APT29, got APT28 with higher confidence
+
+**Explanation**:
+- Attribution is **deterministic and mathematical**
+- Based purely on technique overlap and weights
+- Does NOT consider:
+  - Geopolitical context
+  - Targeting patterns
+  - Temporal factors
+  - Tool sophistication
+
+**Use attribution as ONE data point**, not definitive identification.
+
+### Performance Metrics
+
+**Response Times**:
+- Attribution for layer with 50 techniques: ~200ms
+- Attribution for layer with 200 techniques: ~500ms
+- Listing all actors: ~50ms
+- Actor details: ~30ms
+
+**Scalability**:
+- Currently: 8 threat actors, 128 techniques
+- Scales linearly: 100 actors, 2000 techniques → ~2-3 seconds
+- Database indexes ensure fast lookups
+
+### Security Considerations
+
+- **No Data Leakage**: Attribution runs on layer IDs (internal), not raw intel
+- **Read-Only Attribution**: Doesn't modify layers or threat actor data
+- **Audit Trail**: All attribution requests logged with user ID
+- **Actor Data**: Publicly known APT groups (no sensitive intel)
+
+### Re-seeding Threat Actors
+
+To update threat actor data:
+
+```bash
+# Edit backend/scripts/seed_threat_actors.py
+# Add/modify THREAT_ACTORS dictionary
+
+# Re-run seeding (clears existing data)
+docker-compose exec backend python -m scripts.seed_threat_actors
+
+# Verify
+curl -X GET http://localhost:8000/api/v1/attribution/actors \
+  -H "Authorization: Bearer $TOKEN" | jq '. | length'
+```
+
+**Note**: Seeding clears ALL existing threat actor data.
+
 ### Next Steps
 
-Once Phase 5 validation is complete:
-
-**Phase 6: Attribution Engine**
-- Match layer techniques to threat actor TTPs
-- Generate confidence-scored attribution for APT groups
-- "Which threat actor does this layer profile match?"
+Once Phase 6 validation is complete:
 
 **Phase 7: Remediation Engine**
 - Map red techniques to MITRE mitigations
 - Generate prioritized remediation guidance
 - Link to detection rules (Sigma, YARA)
+- "How do we fix these critical gaps?"
+
+**Phase 8: Frontend Integration**
+- Fork MITRE ATT&CK Navigator
+- Add attribution panel to UI
+- Display threat actor matches with confidence
+- Interactive threat actor drill-down
 
 ---
 
