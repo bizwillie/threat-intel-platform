@@ -240,21 +240,185 @@ These provide:
 
 ---
 
-## Next Steps After Phase 1
+---
 
-Once Phase 1 validation is complete:
+## Phase 2: Vulnerability Pipeline (✅ COMPLETE)
 
-**Phase 2: Vulnerability Pipeline** (Weeks 3-4)
-- Implement Nessus parser
-- Build CVE→TTP mapping (Piranha crown jewel)
-- Create vulnerability endpoints
+### Overview
+
+Phase 2 implements the vulnerability ingestion pipeline, enabling UTIP to parse Nessus scans and map CVEs to MITRE ATT&CK techniques. This creates the **blue layer** - techniques you're vulnerable to.
+
+### Prerequisites
+
+- Phase 1 deployment complete
+- User with `hunter` role created (for uploads)
+
+### Add Hunter Role to Test User
+
+```bash
+# Get admin token
+ADMIN_TOKEN=$(curl -s -X POST "http://localhost:8080/realms/master/protocol/openid-connect/token" \
+  -d "client_id=admin-cli" \
+  -d "grant_type=password" \
+  -d "username=admin" \
+  -d "password=admin" | \
+  python -c "import sys, json; print(json.load(sys.stdin)['access_token'])")
+
+# Get test user ID
+USER_ID=$(curl -s "http://localhost:8080/admin/realms/utip/users?username=test-analyst" \
+  -H "Authorization: Bearer $ADMIN_TOKEN" | \
+  python -c "import sys, json; print(json.load(sys.stdin)[0]['id'])")
+
+# Get hunter role ID
+ROLE_ID=$(curl -s "http://localhost:8080/admin/realms/utip/roles/hunter" \
+  -H "Authorization: Bearer $ADMIN_TOKEN" | \
+  python -c "import sys, json; print(json.load(sys.stdin)['id'])")
+
+# Assign hunter role
+curl -X POST "http://localhost:8080/admin/realms/utip/users/$USER_ID/role-mappings/realm" \
+  -H "Authorization: Bearer $ADMIN_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d "[{\"id\":\"$ROLE_ID\",\"name\":\"hunter\"}]"
+```
+
+### Phase 2 Validation
+
+#### 1. Upload a Nessus Scan
+
+```bash
+# Get JWT token
+TOKEN=$(curl -s -X POST "http://localhost:8080/realms/utip/protocol/openid-connect/token" \
+  -d "client_id=utip-api" \
+  -d "client_secret=TPVGvZvRD5U73Y8yhZjvR108UTAEkn5d" \
+  -d "grant_type=password" \
+  -d "username=test-analyst" \
+  -d "password=analyst123" | \
+  python -c "import sys, json; print(json.load(sys.stdin)['access_token'])")
+
+# Upload test scan
+curl -X POST "http://localhost:8000/api/v1/vuln/upload" \
+  -H "Authorization: Bearer $TOKEN" \
+  -F "file=@test_scan.nessus"
+```
+
+**Expected response:**
+```json
+{
+  "scan_id": "uuid",
+  "filename": "test_scan.nessus",
+  "scan_date": "2024-01-18T13:10:00Z",
+  "uploaded_by": "test-analyst",
+  "vulnerability_count": 8,
+  "unique_cve_count": 8,
+  "technique_count": 4
+}
+```
+
+#### 2. View Blue Layer Techniques
+
+```bash
+# List all scans
+curl -s -X GET "http://localhost:8000/api/v1/vuln/scans" \
+  -H "Authorization: Bearer $TOKEN"
+
+# Get techniques for a specific scan (blue layer)
+curl -s -X GET "http://localhost:8000/api/v1/vuln/scans/{scan_id}/techniques" \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+**Expected blue layer response:**
+```json
+{
+  "scan_id": "uuid",
+  "techniques": [
+    {
+      "technique_id": "T1003.006",
+      "confidence": 0.98,
+      "color": "blue",
+      "source_cves": ["CVE-2020-1472"]
+    },
+    {
+      "technique_id": "T1059",
+      "confidence": 0.95,
+      "color": "blue",
+      "source_cves": ["CVE-2021-44228"]
+    }
+  ],
+  "total": 4
+}
+```
+
+#### 3. Verify Database Mappings
+
+```bash
+# Check CVE→Technique mappings
+docker compose exec postgres psql -U utip -d utip \
+  -c "SELECT cve_id, technique_id, confidence, source FROM cve_techniques ORDER BY confidence DESC;"
+
+# Check vulnerabilities
+docker compose exec postgres psql -U utip -d utip \
+  -c "SELECT cve_id, severity, cvss_score, asset FROM vulnerabilities ORDER BY cvss_score DESC LIMIT 5;"
+```
+
+### Phase 2 API Endpoints
+
+| Endpoint | Method | Auth | Description |
+|----------|--------|------|-------------|
+| `/api/v1/vuln/upload` | POST | hunter | Upload .nessus file |
+| `/api/v1/vuln/scans` | GET | analyst | List all scans |
+| `/api/v1/vuln/scans/{id}` | GET | analyst | Get scan details |
+| `/api/v1/vuln/scans/{id}/techniques` | GET | analyst | Get blue layer |
+
+### Phase 2 Validation Checklist
+
+- [ ] Hunter role added to test user
+- [ ] Nessus scan uploads successfully
+- [ ] Vulnerabilities stored in database
+- [ ] CVE→Technique mappings created (Piranha engine working)
+- [ ] Blue layer techniques queryable via API
+- [ ] Confidence scores present for all mappings
+- [ ] NVD API integration working (live CVE lookups)
+
+### Troubleshooting Phase 2
+
+#### Upload fails with 403 Forbidden
+```bash
+# Verify user has hunter role
+curl -s "http://localhost:8000/api/v1/me" -H "Authorization: Bearer $TOKEN"
+
+# Response should include "hunter" in roles array
+```
+
+#### No technique mappings generated
+```bash
+# Check backend logs for CVE mapper errors
+docker compose logs backend | grep -i "cve_mapper"
+
+# Verify NVD API is accessible
+docker compose exec backend curl https://services.nvd.nist.gov/rest/json/cves/2.0?cveId=CVE-2021-44228
+```
+
+#### Database migration needed
+```bash
+# If vulnerabilities table is missing new columns:
+docker compose exec backend alembic upgrade head
+```
+
+---
+
+## Next Steps After Phase 2
+
+Once Phase 2 validation is complete:
 
 **Phase 3: Intel Worker** (Weeks 5-6)
 - Set up Celery worker
 - Implement PDF/STIX parsers
-- Build regex-based TTP extraction
+- Build regex-based TTP extraction (yellow layer)
 
-See implementation plan for complete roadmap.
+**Phase 5: Correlation Engine** (Week 8)
+- Combine blue (vulnerability) + yellow (intel) = red (critical overlap)
+
+See `PHASE2_COMPLETION_REPORT.md` for detailed Phase 2 documentation.
 
 ---
 

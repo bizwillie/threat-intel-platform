@@ -4,77 +4,351 @@ Vulnerability management routes (Phase 2)
 Endpoints for uploading and managing vulnerability scans.
 """
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
 from app.auth import get_current_user, require_hunter, User
+from app.schemas.vulnerability import (
+    VulnScanResponse,
+    VulnScanListResponse,
+    VulnScanDetailResponse,
+    TechniqueListResponse,
+)
+from app.services.nessus_parser import NessusParser, NessusParseError
+from app.services.cve_mapper import CVEMapper, CVEMapperError
+from app.models.database import VulnerabilityScan, Vulnerability, CVETechnique
+from app.models.database import ProcessingStatus
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
+from app.database import get_db
+import uuid
+from datetime import datetime
+import logging
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/vuln", tags=["Vulnerabilities"])
 
 
-@router.post("/upload")
-async def upload_vulnerability_scan(user: User = Depends(require_hunter)):
+@router.post("/upload", response_model=VulnScanResponse)
+async def upload_vulnerability_scan(
+    file: UploadFile = File(...),
+    user: User = Depends(require_hunter),
+    db: AsyncSession = Depends(get_db)
+):
     """
     Upload a Nessus vulnerability scan (.nessus XML file).
 
-    **Phase 2 Implementation Required**
+    **Phase 2 Implementation**
 
-    This endpoint will:
-    1. Parse .nessus XML file
-    2. Extract CVE-IDs from plugin output
-    3. Map CVEs to MITRE ATT&CK techniques (CVE→CWE→CAPEC→Technique)
-    4. Store in vulnerability_scans + vulnerabilities tables
-    5. Return scan_id
+    This endpoint:
+    1. Validates .nessus file format
+    2. Parses XML to extract vulnerabilities
+    3. Maps CVEs to MITRE ATT&CK techniques (CVE→CWE→CAPEC→Technique)
+    4. Stores scan metadata, vulnerabilities, and technique mappings
+    5. Returns scan_id
 
     Requires: hunter role
     """
-    raise HTTPException(
-        status_code=status.HTTP_501_NOT_IMPLEMENTED,
-        detail="Phase 2: Vulnerability Pipeline not yet implemented"
+    # Validate file extension
+    if not file.filename.endswith('.nessus'):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Only .nessus files are accepted"
+        )
+
+    # Read file content
+    try:
+        file_content = await file.read()
+    except Exception as e:
+        logger.error(f"Failed to read uploaded file: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to read uploaded file"
+        )
+
+    # Validate it's a Nessus file
+    if not NessusParser.validate_file(file_content):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="File does not appear to be a valid Nessus .nessus file"
+        )
+
+    # Parse Nessus file
+    try:
+        parsed_data = NessusParser.parse(file_content, file.filename)
+    except NessusParseError as e:
+        logger.error(f"Nessus parse error: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Failed to parse Nessus file: {str(e)}"
+        )
+
+    scan_metadata = parsed_data["scan_metadata"]
+    vulnerabilities = parsed_data["vulnerabilities"]
+
+    # Create VulnerabilityScan record
+    scan_id = uuid.uuid4()
+    scan_date = scan_metadata.get("scan_date") or datetime.utcnow()
+
+    vuln_scan = VulnerabilityScan(
+        id=scan_id,
+        filename=file.filename,
+        scan_date=scan_date,
+        uploaded_by=user.username,
+        created_at=datetime.utcnow()
+    )
+    db.add(vuln_scan)
+
+    # Store vulnerabilities
+    vuln_count = 0
+    unique_cves = set()
+
+    for vuln_data in vulnerabilities:
+        vuln = Vulnerability(
+            scan_id=scan_id,
+            cve_id=vuln_data["cve_id"],
+            severity=vuln_data["severity"],
+            cvss_score=vuln_data["cvss_score"],
+            asset=vuln_data["asset"],
+            port=vuln_data.get("port"),
+            plugin_id=vuln_data.get("plugin_id"),
+            plugin_name=vuln_data.get("plugin_name"),
+            description=vuln_data.get("description"),
+            solution=vuln_data.get("solution"),
+        )
+        db.add(vuln)
+        vuln_count += 1
+        unique_cves.add(vuln_data["cve_id"])
+
+    await db.commit()
+
+    logger.info(f"Stored {vuln_count} vulnerabilities with {len(unique_cves)} unique CVEs")
+
+    # Map CVEs to techniques (Piranha crown jewel)
+    try:
+        cve_mappings = await CVEMapper.map_multiple_cves(list(unique_cves))
+    except Exception as e:
+        logger.error(f"CVE mapping error: {e}")
+        # Don't fail the upload if mapping fails, just log it
+        cve_mappings = {}
+
+    # Store CVE→Technique mappings
+    technique_count = 0
+    for cve_id, techniques in cve_mappings.items():
+        for tech in techniques:
+            # Check if mapping already exists
+            existing = await db.execute(
+                select(CVETechnique).where(
+                    CVETechnique.cve_id == cve_id,
+                    CVETechnique.technique_id == tech["technique_id"]
+                )
+            )
+            if existing.scalar_one_or_none():
+                continue  # Skip duplicates
+
+            cve_tech = CVETechnique(
+                cve_id=cve_id,
+                technique_id=tech["technique_id"],
+                confidence=tech["confidence"],
+                source=tech["source"]
+            )
+            db.add(cve_tech)
+            technique_count += 1
+
+    await db.commit()
+
+    logger.info(f"Scan {scan_id} uploaded: {vuln_count} vulnerabilities, {technique_count} technique mappings")
+
+    return VulnScanResponse(
+        scan_id=str(scan_id),
+        filename=file.filename,
+        scan_date=scan_date,
+        uploaded_by=user.username,
+        vulnerability_count=vuln_count,
+        unique_cve_count=len(unique_cves),
+        technique_count=technique_count
     )
 
 
-@router.get("/scans")
-async def list_vulnerability_scans(user: User = Depends(get_current_user)):
+@router.get("/scans", response_model=VulnScanListResponse)
+async def list_vulnerability_scans(
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
     """
-    List all vulnerability scans.
-
-    **Phase 2 Implementation Required**
+    List all vulnerability scans with summary statistics.
 
     Returns:
-        List of vulnerability scans with metadata
+        List of scans with metadata and vulnerability counts
     """
-    raise HTTPException(
-        status_code=status.HTTP_501_NOT_IMPLEMENTED,
-        detail="Phase 2: Vulnerability Pipeline not yet implemented"
+    result = await db.execute(
+        select(VulnerabilityScan).order_by(VulnerabilityScan.created_at.desc())
     )
+    scans = result.scalars().all()
+
+    scan_list = []
+    for scan in scans:
+        # Count vulnerabilities for this scan
+        vuln_result = await db.execute(
+            select(Vulnerability).where(Vulnerability.scan_id == scan.id)
+        )
+        vulnerabilities = vuln_result.scalars().all()
+
+        # Count unique CVEs
+        unique_cves = set(v.cve_id for v in vulnerabilities)
+
+        scan_list.append({
+            "scan_id": str(scan.id),
+            "filename": scan.filename,
+            "scan_date": scan.scan_date,
+            "uploaded_by": scan.uploaded_by,
+            "created_at": scan.created_at,
+            "vulnerability_count": len(vulnerabilities),
+            "unique_cve_count": len(unique_cves),
+        })
+
+    return VulnScanListResponse(scans=scan_list, total=len(scan_list))
 
 
-@router.get("/scans/{scan_id}")
-async def get_vulnerability_scan(scan_id: str, user: User = Depends(get_current_user)):
+@router.get("/scans/{scan_id}", response_model=VulnScanDetailResponse)
+async def get_vulnerability_scan(
+    scan_id: str,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
     """
     Get detailed vulnerability scan with all vulnerabilities and mapped techniques.
 
-    **Phase 2 Implementation Required**
-
     Returns:
-        Scan metadata, vulnerabilities, and CVE→TTP mappings
+        Scan metadata, vulnerabilities, CVE→TTP mappings, and technique breakdown
     """
-    raise HTTPException(
-        status_code=status.HTTP_501_NOT_IMPLEMENTED,
-        detail="Phase 2: Vulnerability Pipeline not yet implemented"
+    # Get scan
+    try:
+        scan_uuid = uuid.UUID(scan_id)
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid scan_id format"
+        )
+
+    result = await db.execute(
+        select(VulnerabilityScan).where(VulnerabilityScan.id == scan_uuid)
+    )
+    scan = result.scalar_one_or_none()
+
+    if not scan:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Scan {scan_id} not found"
+        )
+
+    # Get vulnerabilities
+    vuln_result = await db.execute(
+        select(Vulnerability).where(Vulnerability.scan_id == scan_uuid)
+    )
+    vulnerabilities = vuln_result.scalars().all()
+
+    # Get unique CVEs from this scan
+    unique_cves = set(v.cve_id for v in vulnerabilities)
+
+    # Get technique mappings for these CVEs
+    tech_result = await db.execute(
+        select(CVETechnique).where(CVETechnique.cve_id.in_(unique_cves))
+    )
+    cve_techniques = tech_result.scalars().all()
+
+    # Build technique breakdown
+    technique_map = {}
+    for ct in cve_techniques:
+        if ct.technique_id not in technique_map:
+            technique_map[ct.technique_id] = {
+                "technique_id": ct.technique_id,
+                "confidence": ct.confidence,
+                "source_cves": []
+            }
+        technique_map[ct.technique_id]["source_cves"].append(ct.cve_id)
+
+    return VulnScanDetailResponse(
+        scan_id=str(scan.id),
+        filename=scan.filename,
+        scan_date=scan.scan_date,
+        uploaded_by=scan.uploaded_by,
+        created_at=scan.created_at,
+        vulnerabilities=[{
+            "cve_id": v.cve_id,
+            "severity": v.severity,
+            "cvss_score": v.cvss_score,
+            "asset": v.asset,
+            "port": v.port,
+            "plugin_id": v.plugin_id,
+            "plugin_name": v.plugin_name,
+        } for v in vulnerabilities],
+        techniques=list(technique_map.values()),
+        total_vulnerabilities=len(vulnerabilities),
+        total_techniques=len(technique_map)
     )
 
 
-@router.get("/scans/{scan_id}/techniques")
-async def get_scan_techniques(scan_id: str, user: User = Depends(get_current_user)):
+@router.get("/scans/{scan_id}/techniques", response_model=TechniqueListResponse)
+async def get_scan_techniques(
+    scan_id: str,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
     """
     Get only the MITRE ATT&CK technique mappings for a scan.
 
-    **Phase 2 Implementation Required**
+    This returns the "blue layer" data - techniques found in vulnerabilities.
 
     Returns:
-        List of techniques with confidence scores (blue layer data)
+        List of techniques with confidence scores and source CVEs
     """
-    raise HTTPException(
-        status_code=status.HTTP_501_NOT_IMPLEMENTED,
-        detail="Phase 2: Vulnerability Pipeline not yet implemented"
+    # Get scan
+    try:
+        scan_uuid = uuid.UUID(scan_id)
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid scan_id format"
+        )
+
+    result = await db.execute(
+        select(VulnerabilityScan).where(VulnerabilityScan.id == scan_uuid)
+    )
+    scan = result.scalar_one_or_none()
+
+    if not scan:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Scan {scan_id} not found"
+        )
+
+    # Get vulnerabilities to find CVEs
+    vuln_result = await db.execute(
+        select(Vulnerability).where(Vulnerability.scan_id == scan_uuid)
+    )
+    vulnerabilities = vuln_result.scalars().all()
+    unique_cves = set(v.cve_id for v in vulnerabilities)
+
+    # Get technique mappings
+    tech_result = await db.execute(
+        select(CVETechnique).where(CVETechnique.cve_id.in_(unique_cves))
+    )
+    cve_techniques = tech_result.scalars().all()
+
+    # Build technique list
+    technique_map = {}
+    for ct in cve_techniques:
+        if ct.technique_id not in technique_map:
+            technique_map[ct.technique_id] = {
+                "technique_id": ct.technique_id,
+                "confidence": ct.confidence,
+                "color": "blue",  # Blue = vulnerability only (Phase 5 will override to red if intel overlap)
+                "source_cves": []
+            }
+        technique_map[ct.technique_id]["source_cves"].append(ct.cve_id)
+
+    return TechniqueListResponse(
+        scan_id=str(scan.id),
+        techniques=list(technique_map.values()),
+        total=len(technique_map)
     )

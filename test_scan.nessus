@@ -1,0 +1,90 @@
+<?xml version="1.0" ?>
+<NessusClientData_v2>
+  <Policy>
+    <policyName>Basic Network Scan</policyName>
+  </Policy>
+  <Report name="Test Scan" xmlns:cm="http://www.nessus.org/cm">
+    <ReportHost name="192.168.1.100">
+      <HostProperties>
+        <tag name="HOST_START">1705583400</tag>
+        <tag name="host-ip">192.168.1.100</tag>
+        <tag name="operating-system">Linux Kernel 5.4.0</tag>
+      </HostProperties>
+
+      <!-- Critical: Log4Shell - CVE-2021-44228 -->
+      <ReportItem port="8080" svc_name="http" protocol="tcp" severity="4" pluginID="156013" pluginName="Apache Log4j 2.15.0 Remote Code Execution">
+        <cve>CVE-2021-44228</cve>
+        <cvss_base_score>10.0</cvss_base_score>
+        <cvss3_base_score>10.0</cvss3_base_score>
+        <description>The remote Apache Log4j library is affected by a remote code execution vulnerability. An unauthenticated, remote attacker can exploit this to bypass authentication and execute arbitrary code.</description>
+        <solution>Upgrade to Apache Log4j version 2.17.0 or later.</solution>
+        <plugin_output>Vulnerable Log4j version detected: 2.14.1</plugin_output>
+      </ReportItem>
+
+      <!-- High: EternalBlue - CVE-2017-0144 -->
+      <ReportItem port="445" svc_name="cifs" protocol="tcp" severity="4" pluginID="97833" pluginName="MS17-010: Security Update for Microsoft Windows SMB Server (4013389) (ETERNALBLUE) (ETERNALCHAMPION) (ETERNALROMANCE) (ETERNALSYNERGY) (WannaCry) (EternalRocks) (Petya) (uncredentialed check)">
+        <cve>CVE-2017-0144</cve>
+        <cve>CVE-2017-0145</cve>
+        <cvss_base_score>9.3</cvss_base_score>
+        <cvss3_base_score>8.1</cvss3_base_score>
+        <description>The remote Windows host is affected by multiple vulnerabilities in Microsoft Server Message Block 1.0 (SMBv1) that allow remote code execution.</description>
+        <solution>Apply Microsoft security update MS17-010.</solution>
+      </ReportItem>
+
+      <!-- High: Zerologon - CVE-2020-1472 -->
+      <ReportItem port="445" svc_name="cifs" protocol="tcp" severity="4" pluginID="140226" pluginName="Microsoft Windows Netlogon Elevation of Privilege Vulnerability (CVE-2020-1472)">
+        <cve>CVE-2020-1472</cve>
+        <cvss_base_score>9.3</cvss_base_score>
+        <cvss3_base_score>10.0</cvss3_base_score>
+        <description>The remote Windows domain controller is affected by an elevation of privilege vulnerability in the Netlogon protocol.</description>
+        <solution>Apply the latest Windows security updates.</solution>
+      </ReportItem>
+
+      <!-- Medium: SQL Injection potential -->
+      <ReportItem port="80" svc_name="http" protocol="tcp" severity="2" pluginID="11139" pluginName="Web Application Potentially Vulnerable to SQL Injection">
+        <cve>CVE-2019-11043</cve>
+        <cvss_base_score>6.8</cvss_base_score>
+        <cvss3_base_score>6.3</cvss3_base_score>
+        <description>The remote web application may be vulnerable to SQL injection attacks.</description>
+        <solution>Implement proper input validation and use parameterized queries.</solution>
+      </ReportItem>
+
+      <!-- Medium: Weak SSL/TLS -->
+      <ReportItem port="443" svc_name="https" protocol="tcp" severity="2" pluginID="104743" pluginName="SSL/TLS Certificate Signed Using Weak Hashing Algorithm">
+        <cve>CVE-2020-0601</cve>
+        <cvss_base_score>5.0</cvss_base_score>
+        <cvss3_base_score>5.9</cvss3_base_score>
+        <description>The remote SSL/TLS certificate is signed using a weak hashing algorithm.</description>
+        <solution>Replace the certificate with one signed using SHA-256 or stronger.</solution>
+      </ReportItem>
+
+    </ReportHost>
+
+    <ReportHost name="192.168.1.101">
+      <HostProperties>
+        <tag name="HOST_START">1705583400</tag>
+        <tag name="host-ip">192.168.1.101</tag>
+        <tag name="operating-system">Windows Server 2019</tag>
+      </HostProperties>
+
+      <!-- Critical: BlueKeep - CVE-2019-0708 -->
+      <ReportItem port="3389" svc_name="msrdp" protocol="tcp" severity="4" pluginID="125475" pluginName="MS19-05: Security Update for Remote Desktop Services (CVE-2019-0708) (BlueKeep) (uncredentialed check)">
+        <cve>CVE-2019-0708</cve>
+        <cvss_base_score>10.0</cvss_base_score>
+        <cvss3_base_score>9.8</cvss3_base_score>
+        <description>The remote Windows host is affected by a remote code execution vulnerability in Remote Desktop Services.</description>
+        <solution>Apply Microsoft security updates.</solution>
+      </ReportItem>
+
+      <!-- High: PrintNightmare - CVE-2021-34527 -->
+      <ReportItem port="445" svc_name="cifs" protocol="tcp" severity="3" pluginID="151515" pluginName="Windows Print Spooler Remote Code Execution Vulnerability (CVE-2021-34527) (PrintNightmare)">
+        <cve>CVE-2021-34527</cve>
+        <cvss_base_score>9.0</cvss_base_score>
+        <cvss3_base_score>8.8</cvss3_base_score>
+        <description>The Windows Print Spooler service is affected by a remote code execution vulnerability.</description>
+        <solution>Apply the latest Windows security patches and restrict Print Spooler access.</solution>
+      </ReportItem>
+
+    </ReportHost>
+  </Report>
+</NessusClientData_v2>

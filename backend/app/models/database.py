@@ -136,7 +136,13 @@ class Vulnerability(Base):
     scan_id = Column(UUID(as_uuid=True), ForeignKey("vulnerability_scans.id", ondelete="CASCADE"), nullable=False)
     cve_id = Column(String(20), nullable=False)  # e.g., "CVE-2024-1234"
     severity = Column(String(20), nullable=False)  # e.g., "Critical", "High"
+    cvss_score = Column(Float, nullable=True)  # CVSS score (v2 or v3)
     asset = Column(String(255), nullable=False)  # Hostname or IP
+    port = Column(String(20), nullable=True)  # Port/protocol (e.g., "443/tcp")
+    plugin_id = Column(String(20), nullable=True)  # Nessus plugin ID
+    plugin_name = Column(String(500), nullable=True)  # Nessus plugin name
+    description = Column(Text, nullable=True)  # Vulnerability description
+    solution = Column(Text, nullable=True)  # Remediation guidance
 
     # Relationship to scan
     scan = relationship("VulnerabilityScan", back_populates="vulnerabilities")
