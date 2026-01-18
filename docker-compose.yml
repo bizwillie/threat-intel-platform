@@ -79,10 +79,12 @@ services:
       API_PORT: 8000
       ENVIRONMENT: development
       DEBUG: "True"
+      UPLOAD_DIR: /app/uploads
     ports:
       - "8000:8000"
     volumes:
       - ./backend:/app
+      - upload-data:/app/uploads
     depends_on:
       postgres:
         condition: service_healthy
@@ -95,26 +97,31 @@ services:
       - utip-network
 
   # Intel Worker - "The Hunter" (Phase 3)
-  # Commented out until Phase 3
-  # worker:
-  #   build:
-  #     context: ./worker
-  #     dockerfile: Dockerfile
-  #   container_name: utip-worker
-  #   environment:
-  #     DATABASE_URL: postgresql://utip:utip_password@postgres:5432/utip
-  #     REDIS_URL: redis://redis:6379/0
-  #   volumes:
-  #     - ./worker:/app
-  #   depends_on:
-  #     - postgres
-  #     - redis
-  #   command: celery -A tasks worker --loglevel=info
-  #   networks:
-  #     - utip-network
+  worker:
+    build:
+      context: ./worker
+      dockerfile: Dockerfile
+    container_name: utip-worker
+    environment:
+      DATABASE_URL: postgresql://utip:utip_password@postgres:5432/utip
+      REDIS_URL: redis://redis:6379/0
+      UPLOAD_DIR: /app/uploads
+    volumes:
+      - ./worker:/app
+      - upload-data:/app/uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: celery -A celery_app worker --loglevel=info --queues=intel
+    networks:
+      - utip-network
 
 volumes:
   postgres-data:
+    driver: local
+  upload-data:
     driver: local
 
 networks:

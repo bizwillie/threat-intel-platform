@@ -572,5 +572,383 @@ See [`PHASE2.5_FEATURE_FLAGS.md`](PHASE2.5_FEATURE_FLAGS.md) for:
 
 ---
 
+## Phase 3: Intel Worker - Threat Intelligence Ingestion (✅ COMPLETE)
+
+### Overview
+
+Phase 3 implements the **Intel Worker** - an asynchronous Celery-based worker that:
+- Processes threat intelligence documents (PDF, STIX, text)
+- Extracts MITRE ATT&CK techniques using regex patterns
+- Generates the **yellow layer** (techniques observed in threat intel)
+- Stores extracted techniques in the database
+
+**Key Feature**: Regex-based TTP extraction - high-confidence, deterministic, no LLM required (perfect for air-gapped environments)
+
+### Architecture
+
+```
+User uploads PDF/STIX → Core API stores file → Queues Celery task
+                                                       ↓
+Intel Worker picks up task → Parses document → Runs regex extraction → Stores techniques
+```
+
+### Deployment
+
+#### 1. Start Celery Worker
+
+The worker is already configured in `docker-compose.yml`:
+
+```bash
+# Build and start the worker
+docker compose up -d --build worker
+
+# Verify worker is running
+docker compose ps worker
+
+# View worker logs
+docker compose logs -f worker
+```
+
+**Expected output**: Worker should show as "running" and log:
+```
+[tasks]
+  . tasks.document_processing.process_threat_report
+  . tasks.document_processing.get_processing_statistics
+```
+
+#### 2. Verify Worker Health
+
+```bash
+# Check Celery worker status
+docker compose exec worker celery -A celery_app inspect active
+
+# Check registered tasks
+docker compose exec worker celery -A celery_app inspect registered
+
+# Check active queues
+docker compose exec worker celery -A celery_app inspect active_queues
+```
+
+**Expected output**: Worker should be connected to the `intel` queue.
+
+### Testing Phase 3
+
+#### 1. Create Test Document
+
+Create a simple threat intelligence text file:
+
+```bash
+cat > test_threat_report.txt <<EOF
+APT29 Threat Intelligence Report
+
+The threat actors deployed ransomware to encrypt files across the network.
+They used PowerShell to execute malicious scripts and disabled antivirus software.
+The attack began with a spear-phishing email containing a weaponized PDF attachment.
+The attackers established C2 communication via HTTP beaconing.
+They performed network scanning to discover additional systems.
+EOF
+```
+
+**Expected Techniques to Extract**:
+- T1486 (Data Encrypted for Impact) - ransomware
+- T1059.001 (PowerShell) - PowerShell
+- T1562.001 (Disable Antivirus) - disabled antivirus
+- T1566.001 (Spearphishing Attachment) - spear-phishing, weaponized PDF
+- T1071.001 (Web Protocols) - HTTP
+- T1046 (Network Service Scanning) - network scanning
+
+#### 2. Upload Threat Intelligence
+
+```bash
+# Get authentication token (use hunter role)
+TOKEN=$(curl -s -X POST "http://localhost:8080/realms/utip/protocol/openid-connect/token" \
+  -d "client_id=utip-api" \
+  -d "client_secret=<client-secret>" \
+  -d "grant_type=password" \
+  -d "username=test-hunter" \
+  -d "password=<password>" | jq -r '.access_token')
+
+# Upload threat intel document
+curl -X POST "http://localhost:8000/api/v1/intel/upload" \
+  -H "Authorization: Bearer $TOKEN" \
+  -F "file=@test_threat_report.txt"
+```
+
+**Expected response** (202 Accepted):
+```json
+{
+  "report_id": "550e8400-e29b-41d4-a716-446655440000",
+  "filename": "test_threat_report.txt",
+  "status": "queued",
+  "message": "Threat report uploaded and queued for processing"
+}
+```
+
+#### 3. Check Processing Status
+
+```bash
+# Use the report_id from the upload response
+REPORT_ID="550e8400-e29b-41d4-a716-446655440000"
+
+# Check status (should transition: queued → processing → complete)
+curl -s "http://localhost:8000/api/v1/intel/reports/$REPORT_ID/status" \
+  -H "Authorization: Bearer $TOKEN" | jq
+```
+
+**Expected response**:
+```json
+{
+  "report_id": "550e8400-e29b-41d4-a716-446655440000",
+  "filename": "test_threat_report.txt",
+  "status": "complete",
+  "created_at": "2024-01-18T14:30:00Z",
+  "processed_at": "2024-01-18T14:30:05Z",
+  "error_message": null,
+  "techniques_count": 6
+}
+```
+
+#### 4. View Extracted Techniques (Yellow Layer)
+
+```bash
+# Get extracted techniques
+curl -s "http://localhost:8000/api/v1/intel/reports/$REPORT_ID/techniques" \
+  -H "Authorization: Bearer $TOKEN" | jq
+```
+
+**Expected response**:
+```json
+[
+  {
+    "technique_id": "T1046",
+    "confidence": 0.90,
+    "evidence": "...performed network scanning to discover...",
+    "extraction_method": "regex"
+  },
+  {
+    "technique_id": "T1059.001",
+    "confidence": 0.90,
+    "evidence": "...used PowerShell to execute malicious scripts...",
+    "extraction_method": "regex"
+  },
+  {
+    "technique_id": "T1071.001",
+    "confidence": 0.90,
+    "evidence": "...C2 communication via HTTP beaconing...",
+    "extraction_method": "regex"
+  },
+  {
+    "technique_id": "T1486",
+    "confidence": 0.95,
+    "evidence": "...deployed ransomware to encrypt files...",
+    "extraction_method": "regex"
+  },
+  {
+    "technique_id": "T1562.001",
+    "confidence": 0.90,
+    "evidence": "...disabled antivirus software...",
+    "extraction_method": "regex"
+  },
+  {
+    "technique_id": "T1566.001",
+    "confidence": 0.90,
+    "evidence": "...spear-phishing email containing a weaponized PDF...",
+    "extraction_method": "regex"
+  }
+]
+```
+
+#### 5. View All Reports
+
+```bash
+# List all threat intelligence reports
+curl -s "http://localhost:8000/api/v1/intel/reports" \
+  -H "Authorization: Bearer $TOKEN" | jq
+```
+
+#### 6. Get Processing Statistics
+
+```bash
+# Get worker processing statistics
+curl -s "http://localhost:8000/api/v1/intel/statistics" \
+  -H "Authorization: Bearer $TOKEN" | jq
+```
+
+**Expected response**:
+```json
+{
+  "status_breakdown": {
+    "complete": 1,
+    "processing": 0,
+    "queued": 0,
+    "failed": 0
+  },
+  "total_techniques_extracted": 6,
+  "average_techniques_per_report": 6.0,
+  "timestamp": "2024-01-18T14:35:00Z"
+}
+```
+
+### Phase 3 API Endpoints
+
+| Endpoint | Method | Auth | Description |
+|----------|--------|------|-------------|
+| `/api/v1/intel/upload` | POST | hunter | Upload threat intel document |
+| `/api/v1/intel/reports` | GET | analyst | List all reports |
+| `/api/v1/intel/reports/{id}` | GET | analyst | Get report with techniques |
+| `/api/v1/intel/reports/{id}/status` | GET | analyst | Get processing status |
+| `/api/v1/intel/reports/{id}/techniques` | GET | analyst | Get yellow layer techniques |
+| `/api/v1/intel/statistics` | GET | analyst | Get processing statistics |
+
+### Supported File Types
+
+| Extension | Type | Parser |
+|-----------|------|--------|
+| `.pdf` | PDF Reports | pdfplumber |
+| `.json`, `.stix`, `.stix2` | STIX Bundles | stix2 library |
+| `.txt` | Plain Text | Built-in |
+
+**Max File Size**: 50 MB
+
+### Phase 3 Validation Checklist
+
+- [ ] Celery worker running and connected to Redis
+- [ ] Test threat intel document uploads successfully
+- [ ] Report status transitions: queued → processing → complete
+- [ ] Techniques extracted and stored in `extracted_techniques` table
+- [ ] Yellow layer techniques queryable via API
+- [ ] Confidence scores present for all extracted techniques
+- [ ] Worker logs show successful processing
+- [ ] Uploaded files cleaned up after processing
+
+### Troubleshooting Phase 3
+
+#### Worker not processing tasks
+
+**Symptoms**: Reports stuck in "queued" status
+
+**Check**:
+```bash
+# Ensure worker is running
+docker compose ps worker
+
+# Check worker logs
+docker compose logs worker
+
+# Verify Redis connection
+docker compose exec worker celery -A celery_app inspect ping
+```
+
+**Fix**: Restart worker
+```bash
+docker compose restart worker
+```
+
+#### Processing fails with error
+
+**Symptoms**: Report status = "failed"
+
+**Check**:
+```bash
+# View worker error logs
+docker compose logs worker | grep -i error
+
+# Check specific report error
+curl -s "http://localhost:8000/api/v1/intel/reports/$REPORT_ID/status" \
+  -H "Authorization: Bearer $TOKEN" | jq '.error_message'
+```
+
+**Common Causes**:
+- Corrupted PDF file → Use valid PDF
+- File too large → Max 50 MB
+- Unsupported file type → Only .pdf, .json, .stix, .txt
+
+#### No techniques extracted
+
+**Symptoms**: techniques_count = 0
+
+**Causes**:
+- Document doesn't contain technique indicators
+- Text extraction failed (scanned PDF with no text)
+
+**Check**: View worker logs for extraction details
+```bash
+docker compose logs worker | grep "Extracted.*techniques"
+```
+
+### Monitoring Worker Performance
+
+```bash
+# View active Celery tasks
+docker compose exec worker celery -A celery_app inspect active
+
+# View worker stats
+docker compose exec worker celery -A celery_app inspect stats
+
+# Monitor queue depth (Redis)
+docker compose exec redis redis-cli LLEN intel
+```
+
+### Database Queries
+
+```bash
+# Check extracted techniques
+docker compose exec postgres psql -U utip -d utip \
+  -c "SELECT technique_id, COUNT(*) FROM extracted_techniques GROUP BY technique_id ORDER BY COUNT(*) DESC LIMIT 10;"
+
+# Check reports by status
+docker compose exec postgres psql -U utip -d utip \
+  -c "SELECT status, COUNT(*) FROM threat_reports GROUP BY status;"
+
+# Check average processing time
+docker compose exec postgres psql -U utip -d utip \
+  -c "SELECT AVG(EXTRACT(EPOCH FROM (processed_at - created_at))) as avg_seconds FROM threat_reports WHERE status = 'complete';"
+```
+
+### Regex Extraction Coverage
+
+Phase 3 regex extractor covers **70+ ATT&CK techniques** across all 12 tactics:
+
+- **Initial Access**: 5 techniques (phishing, exploits, remote services)
+- **Execution**: 8 techniques (PowerShell, cmd, bash, scripts)
+- **Persistence**: 6 techniques (scheduled tasks, services, run keys)
+- **Privilege Escalation**: 3 techniques (exploits, token manipulation, UAC bypass)
+- **Defense Evasion**: 7 techniques (obfuscation, AV disable, process injection)
+- **Credential Access**: 7 techniques (credential dumping, brute force, keylogging)
+- **Discovery**: 8 techniques (system info, network scan, process discovery)
+- **Lateral Movement**: 5 techniques (RDP, SMB, WinRM, pass-the-hash)
+- **Collection**: 5 techniques (data staging, screenshots, file collection)
+- **Command and Control**: 6 techniques (C2, beaconing, DNS tunneling)
+- **Exfiltration**: 3 techniques (exfil over C2, web service, alternative protocols)
+- **Impact**: 6 techniques (ransomware, data destruction, service stop)
+
+### Documentation
+
+See [`PHASE3_INTEL_WORKER.md`](PHASE3_INTEL_WORKER.md) for:
+- Complete architecture documentation
+- Detailed API reference
+- Performance metrics
+- Security considerations
+- Troubleshooting guide
+- Regex pattern library
+
+---
+
+## Next Steps After Phase 3
+
+Once Phase 3 validation is complete:
+
+**Phase 5: Correlation Engine** (Week 8)
+- Generate layers combining blue (vulnerability) + yellow (intel)
+- Red techniques = critical overlap (threats you're vulnerable to)
+- Color-coded MITRE Navigator layers
+
+**Phase 6: Attribution Engine** (Week 9)
+- Match layer techniques to threat actor TTPs
+- Confidence-based attribution scoring
+- Top 10 threat actors for your environment
+
+---
+
 **Classification**: INTERNAL USE ONLY
 **Theme**: Midnight Vulture
