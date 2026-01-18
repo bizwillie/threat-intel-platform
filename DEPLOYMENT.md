@@ -422,5 +422,155 @@ See `PHASE2_COMPLETION_REPORT.md` for detailed Phase 2 documentation.
 
 ---
 
+## Phase 2.5: Optional Feature Enhancements (✅ COMPLETE)
+
+### Overview
+
+Phase 2.5 introduces **optional enhancements** to the vulnerability pipeline controlled by feature flags. All features are backward compatible and gracefully degrade when disabled.
+
+**Key Benefits**:
+- Control external dependencies (disable for air-gapped environments)
+- Scale features based on resources
+- Customize mapping coverage (15 core CWEs vs. 400+ extended)
+- Maintain data sovereignty
+
+### Feature Flags
+
+| Feature | Environment Variable | Default | Description |
+|---------|---------------------|---------|-------------|
+| NVD API | `ENABLE_NVD_API` | `true` | Query NVD for live CVE data |
+| Redis Cache | `ENABLE_REDIS_CACHE` | `false` | Persistent CVE caching |
+| CAPEC Database | `ENABLE_CAPEC_DATABASE` | `false` | Full CAPEC attack patterns |
+| STIX Validation | `ENABLE_ATTACK_STIX_VALIDATION` | `false` | Validate techniques vs. ATT&CK |
+| Extended CWE | `ENABLE_EXTENDED_CWE_MAPPINGS` | `false` | 400+ CWE mappings vs. core 15 |
+
+### Configuration Examples
+
+**Air-Gapped (No Internet)**:
+```env
+ENABLE_NVD_API=false
+ENABLE_CAPEC_DATABASE=false
+ENABLE_ATTACK_STIX_VALIDATION=false
+ENABLE_REDIS_CACHE=false
+ENABLE_EXTENDED_CWE_MAPPINGS=false
+```
+
+**Recommended Production**:
+```env
+ENABLE_NVD_API=true
+NVD_API_KEY=your-api-key-here
+ENABLE_REDIS_CACHE=true
+ENABLE_ATTACK_STIX_VALIDATION=true
+ENABLE_EXTENDED_CWE_MAPPINGS=false
+ENABLE_CAPEC_DATABASE=false
+```
+
+### Check Feature Status
+
+```bash
+curl http://localhost:8000/api/v1/vuln/features \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+**Response** shows which features are enabled and their statistics:
+```json
+{
+  "phase": "2.5",
+  "features": {
+    "nvd_api": {
+      "enabled": true,
+      "has_api_key": true,
+      "cache_ttl_days": 7,
+      "in_memory_cache_size": 12
+    },
+    "redis_cache": {
+      "enabled": true,
+      "connected": true,
+      "total_keys": 45,
+      "hit_rate": 87.5
+    }
+  }
+}
+```
+
+### Enabling Optional Features
+
+#### 1. Enable Redis Cache
+
+Already deployed in `docker-compose.yml`:
+```bash
+# Update .env
+ENABLE_REDIS_CACHE=true
+
+# Restart backend
+docker compose restart backend
+```
+
+#### 2. Enable STIX Validation
+
+Download ATT&CK STIX data:
+```bash
+mkdir -p data
+wget -O data/enterprise-attack.json \
+  https://raw.githubusercontent.com/mitre-attack/attack-stix-data/master/enterprise-attack/enterprise-attack.json
+```
+
+Update `docker-compose.yml`:
+```yaml
+services:
+  backend:
+    volumes:
+      - ./data:/app/data:ro
+```
+
+Update `.env`:
+```env
+ENABLE_ATTACK_STIX_VALIDATION=true
+ATTACK_STIX_PATH=/app/data/enterprise-attack.json
+```
+
+Restart:
+```bash
+docker compose build backend
+docker compose up -d backend
+```
+
+#### 3. Get NVD API Key
+
+Without key: 5 requests / 30 seconds
+With key: 50 requests / 30 seconds
+
+1. Visit: https://nvd.nist.gov/developers/request-an-api-key
+2. Register and receive key via email
+3. Add to `.env`:
+   ```env
+   NVD_API_KEY=your-api-key-here
+   ```
+4. Restart backend: `docker compose restart backend`
+
+### Phase 2.5 Validation
+
+```bash
+# Check feature status
+curl -s http://localhost:8000/api/v1/vuln/features \
+  -H "Authorization: Bearer $TOKEN" | jq
+
+# Upload scan - should use enabled features
+curl -X POST http://localhost:8000/api/v1/vuln/upload \
+  -H "Authorization: Bearer $TOKEN" \
+  -F "file=@test_scan.nessus"
+```
+
+### Documentation
+
+See [`PHASE2.5_FEATURE_FLAGS.md`](PHASE2.5_FEATURE_FLAGS.md) for:
+- Detailed feature descriptions
+- Performance impact analysis
+- Security considerations
+- Troubleshooting guide
+- Migration instructions
+
+---
+
 **Classification**: INTERNAL USE ONLY
 **Theme**: Midnight Vulture

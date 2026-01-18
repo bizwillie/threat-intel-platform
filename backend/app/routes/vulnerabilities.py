@@ -352,3 +352,25 @@ async def get_scan_techniques(
         techniques=list(technique_map.values()),
         total=len(technique_map)
     )
+
+
+@router.get("/features", tags=["Phase 2.5"])
+async def get_feature_statistics(user: User = Depends(get_current_user)):
+    """
+    Get Phase 2.5 feature flag statistics.
+
+    Returns information about which optional enhancements are enabled and their status.
+    Useful for troubleshooting and understanding the current configuration.
+
+    **Phase 2.5 Features:**
+    - NVD API integration (live CVE data)
+    - CAPEC database (comprehensive CWE→Technique mappings)
+    - ATT&CK STIX validation (technique validation)
+    - Redis cache (persistent caching)
+    - Extended CWE mappings (400+ CWEs vs. core 15)
+
+    Returns:
+        Feature statistics and enablement status
+    """
+    stats = await CVEMapper.get_feature_statistics()
+    return stats
