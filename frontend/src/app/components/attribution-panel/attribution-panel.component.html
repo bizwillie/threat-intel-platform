@@ -1,0 +1,86 @@
+<div class="attribution-panel glass-card">
+  <div class="panel-header">
+    <h2>🎯 Threat Actor Attribution</h2>
+    <button class="btn-close" (click)="onClose()" title="Close">×</button>
+  </div>
+
+  <div class="panel-content">
+    <div class="loading-indicator" *ngIf="loading">
+      <div class="spinner"></div>
+      <p>Analyzing threat actors...</p>
+    </div>
+
+    <div class="error-message" *ngIf="error">
+      {{ error }}
+    </div>
+
+    <div class="attribution-results" *ngIf="!loading && attribution">
+      <div class="summary">
+        <p class="text-secondary">
+          Analyzed <strong>{{ attribution.total_layer_techniques }}</strong> techniques against
+          <strong>{{ attribution.attributions.length }}</strong> known threat actors
+        </p>
+      </div>
+
+      <div class="actor-list">
+        <div
+          *ngFor="let attr of attribution.attributions; let i = index"
+          class="actor-card"
+          [class.pulse-critical]="attr.confidence >= 0.8"
+        >
+          <div class="actor-rank">
+            {{ i + 1 }}
+          </div>
+
+          <div class="actor-info">
+            <h3 class="actor-name">{{ attr.actor.name }}</h3>
+            <p class="actor-description text-secondary">{{ attr.actor.description }}</p>
+
+            <div class="actor-stats">
+              <div class="stat">
+                <span class="stat-label">Confidence:</span>
+                <span
+                  class="stat-value"
+                  [style.color]="getConfidenceColor(attr.confidence)"
+                >
+                  {{ (attr.confidence * 100).toFixed(1) }}%
+                </span>
+                <span
+                  class="confidence-badge"
+                  [style.background-color]="getConfidenceColor(attr.confidence)"
+                >
+                  {{ getConfidenceLabel(attr.confidence) }}
+                </span>
+              </div>
+
+              <div class="stat">
+                <span class="stat-label">Matching Techniques:</span>
+                <span class="stat-value font-mono">
+                  {{ attr.overlap_count }} / {{ attr.total_techniques }}
+                </span>
+              </div>
+            </div>
+
+            <div class="matching-techniques">
+              <details>
+                <summary>View Matching Techniques ({{ attr.matching_techniques.length }})</summary>
+                <div class="technique-chips">
+                  <span
+                    *ngFor="let techId of attr.matching_techniques"
+                    class="technique-chip font-mono"
+                  >
+                    {{ techId }}
+                  </span>
+                </div>
+              </details>
+            </div>
+          </div>
+        </div>
+
+        <div class="no-results" *ngIf="attribution.attributions.length === 0">
+          <p class="text-secondary">No threat actor matches found for this layer.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

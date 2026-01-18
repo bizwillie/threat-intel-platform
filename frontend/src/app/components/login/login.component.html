@@ -1,0 +1,56 @@
+<div class="login-container">
+  <div class="login-card glass-card">
+    <div class="login-header">
+      <h1>UTIP</h1>
+      <p class="text-secondary">Unified Threat Intelligence Platform</p>
+      <p class="classification-banner">INTERNAL USE ONLY</p>
+    </div>
+
+    <form (ngSubmit)="login()" class="login-form">
+      <div class="form-group">
+        <label for="username">Username</label>
+        <input
+          type="text"
+          id="username"
+          name="username"
+          [(ngModel)]="username"
+          [disabled]="loading"
+          placeholder="Enter your username"
+          autocomplete="username"
+          required
+        />
+      </div>
+
+      <div class="form-group">
+        <label for="password">Password</label>
+        <input
+          type="password"
+          id="password"
+          name="password"
+          [(ngModel)]="password"
+          [disabled]="loading"
+          placeholder="Enter your password"
+          autocomplete="current-password"
+          required
+        />
+      </div>
+
+      <div class="error-message" *ngIf="error">
+        {{ error }}
+      </div>
+
+      <button
+        type="submit"
+        class="btn-primary"
+        [disabled]="loading || !username || !password"
+      >
+        <span *ngIf="!loading">Sign In</span>
+        <span *ngIf="loading">Authenticating...</span>
+      </button>
+    </form>
+
+    <div class="login-footer">
+      <p class="text-tertiary font-mono">Theme: Midnight Vulture</p>
+    </div>
+  </div>
+</div>

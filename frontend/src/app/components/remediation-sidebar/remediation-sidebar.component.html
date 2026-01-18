@@ -1,0 +1,106 @@
+<div class="remediation-sidebar glass-card">
+  <div class="panel-header">
+    <h2>🛡️ Remediation Guidance</h2>
+    <button class="btn-close" (click)="onClose()" title="Close">×</button>
+  </div>
+
+  <div class="panel-content">
+    <div class="technique-header" *ngIf="techniqueId">
+      <span class="technique-id font-mono">{{ techniqueId }}</span>
+    </div>
+
+    <div class="loading-indicator" *ngIf="loading">
+      <div class="spinner"></div>
+      <p>Loading remediation...</p>
+    </div>
+
+    <div class="error-message" *ngIf="error">
+      {{ error }}
+    </div>
+
+    <div class="remediation-content" *ngIf="!loading && remediation">
+      <!-- MITRE Mitigations -->
+      <section class="remediation-section" *ngIf="remediation.mitigations.length > 0">
+        <h3>MITRE Mitigations</h3>
+        <div class="mitigation-list">
+          <div
+            *ngFor="let mitigation of remediation.mitigations"
+            class="mitigation-card"
+          >
+            <div class="mitigation-header">
+              <span class="mitigation-id font-mono">{{ mitigation.mitigation_id }}</span>
+              <span class="mitigation-name">{{ mitigation.name }}</span>
+            </div>
+            <p class="mitigation-description text-secondary">
+              {{ mitigation.description }}
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <!-- CIS Controls -->
+      <section class="remediation-section" *ngIf="remediation.cis_controls.length > 0">
+        <h3>CIS Controls v8</h3>
+        <div class="cis-list">
+          <div
+            *ngFor="let control of remediation.cis_controls"
+            class="cis-card"
+          >
+            <div class="cis-header">
+              <span class="cis-id font-mono">{{ control.control_id }}</span>
+              <span class="cis-control">{{ control.control }}</span>
+            </div>
+            <p class="cis-safeguard text-secondary">
+              {{ control.safeguard }}
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <!-- Detection Rules -->
+      <section class="remediation-section" *ngIf="remediation.detection_rules.length > 0">
+        <h3>Detection Rules</h3>
+        <div class="detection-list">
+          <div
+            *ngFor="let rule of remediation.detection_rules"
+            class="detection-card"
+          >
+            <h4 class="rule-name">{{ rule.rule_name }}</h4>
+            <p class="rule-description text-secondary">{{ rule.description }}</p>
+
+            <div class="rule-details">
+              <div class="rule-field">
+                <span class="field-label">Log Source:</span>
+                <code class="field-value">{{ rule.log_source }}</code>
+              </div>
+              <div class="rule-field">
+                <span class="field-label">Detection:</span>
+                <code class="field-value">{{ rule.detection }}</code>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Hardening Guidance -->
+      <section class="remediation-section" *ngIf="remediation.hardening_guidance">
+        <h3>Hardening Guidance</h3>
+        <div class="hardening-content">
+          <pre class="hardening-text">{{ remediation.hardening_guidance }}</pre>
+        </div>
+      </section>
+
+      <!-- No Data Available -->
+      <div class="no-data" *ngIf="
+        remediation.mitigations.length === 0 &&
+        remediation.cis_controls.length === 0 &&
+        remediation.detection_rules.length === 0 &&
+        !remediation.hardening_guidance
+      ">
+        <p class="text-secondary">
+          No remediation guidance available for this technique.
+        </p>
+      </div>
+    </div>
+  </div>
+</div>

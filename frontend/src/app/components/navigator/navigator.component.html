@@ -1,0 +1,114 @@
+<div class="navigator-container">
+  <!-- Top Navigation Bar -->
+  <div class="top-bar">
+    <div class="top-bar-left">
+      <h1 class="app-title">UTIP</h1>
+      <span class="classification-label">INTERNAL USE ONLY</span>
+    </div>
+
+    <div class="top-bar-center">
+      <span class="layer-name" *ngIf="currentLayer">{{ currentLayer.name }}</span>
+      <span class="text-tertiary" *ngIf="!currentLayer">No layer loaded</span>
+    </div>
+
+    <div class="top-bar-right">
+      <button class="btn-icon" (click)="toggleAttributionPanel()" title="Threat Actor Attribution">
+        <span class="icon">🎯</span>
+      </button>
+      <button class="btn-icon" (click)="toggleRemediationSidebar()" title="Remediation Guidance">
+        <span class="icon">🛡️</span>
+      </button>
+      <button class="btn-icon" (click)="logout()" title="Logout">
+        <span class="icon">🚪</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- Layer Statistics Bar -->
+  <div class="stats-bar" *ngIf="currentLayer">
+    <div class="stat">
+      <span class="stat-label">Total Techniques:</span>
+      <span class="stat-value">{{ currentLayer.statistics.total_techniques }}</span>
+    </div>
+    <div class="stat">
+      <span class="stat-label badge-red">Red:</span>
+      <span class="stat-value">{{ currentLayer.breakdown.red }}</span>
+    </div>
+    <div class="stat">
+      <span class="stat-label badge-yellow">Yellow:</span>
+      <span class="stat-value">{{ currentLayer.breakdown.yellow }}</span>
+    </div>
+    <div class="stat">
+      <span class="stat-label badge-blue">Blue:</span>
+      <span class="stat-value">{{ currentLayer.breakdown.blue }}</span>
+    </div>
+    <div class="stat">
+      <span class="stat-label">Avg Confidence:</span>
+      <span class="stat-value">{{ (currentLayer.statistics.avg_confidence * 100).toFixed(1) }}%</span>
+    </div>
+  </div>
+
+  <!-- Main Content Area -->
+  <div class="main-content">
+    <!-- Matrix Visualization (Placeholder) -->
+    <div class="matrix-container">
+      <div class="matrix-placeholder" *ngIf="!loading && !currentLayer">
+        <h2>No Layer Loaded</h2>
+        <p class="text-secondary">Generate a layer from threat intel and vulnerability scans to get started.</p>
+      </div>
+
+      <div class="loading-indicator" *ngIf="loading">
+        <div class="spinner"></div>
+        <p>Loading layer data...</p>
+      </div>
+
+      <!-- Technique List (Temporary visualization until Navigator integration) -->
+      <div class="technique-list" *ngIf="!loading && currentLayer">
+        <h3>Layer Techniques</h3>
+        <div
+          *ngFor="let technique of currentLayer.techniques"
+          class="technique-card"
+          [style.border-left-color]="technique.color"
+          (click)="onTechniqueSelected(technique.technique_id)"
+        >
+          <div class="technique-header">
+            <span class="technique-id font-mono">{{ technique.technique_id }}</span>
+            <span
+              class="technique-badge"
+              [ngClass]="{
+                'badge-red': technique.color === '#EF4444',
+                'badge-yellow': technique.color === '#F59E0B',
+                'badge-blue': technique.color === '#3B82F6'
+              }"
+            >
+              <span *ngIf="technique.from_intel && technique.from_vuln">CRITICAL</span>
+              <span *ngIf="technique.from_intel && !technique.from_vuln">INTEL</span>
+              <span *ngIf="!technique.from_intel && technique.from_vuln">VULN</span>
+            </span>
+          </div>
+          <div class="technique-meta">
+            <span class="confidence">Confidence: {{ (technique.confidence * 100).toFixed(0) }}%</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="error-message" *ngIf="error">
+        {{ error }}
+      </div>
+    </div>
+
+    <!-- Attribution Panel (Right Side) -->
+    <app-attribution-panel
+      *ngIf="showAttributionPanel && currentLayer"
+      [layerId]="currentLayer.id"
+      (close)="showAttributionPanel = false"
+    ></app-attribution-panel>
+
+    <!-- Remediation Sidebar (Right Side) -->
+    <app-remediation-sidebar
+      *ngIf="showRemediationSidebar && selectedTechniqueId"
+      [techniqueId]="selectedTechniqueId"
+      (close)="showRemediationSidebar = false"
+    ></app-remediation-sidebar>
+  </div>
+</div>

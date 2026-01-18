@@ -118,6 +118,19 @@ services:
     networks:
       - utip-network
 
+  # Frontend - Angular SPA (Phase 8)
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: utip-frontend
+    ports:
+      - "4200:80"
+    depends_on:
+      - backend
+    networks:
+      - utip-network
+
 volumes:
   postgres-data:
     driver: local
