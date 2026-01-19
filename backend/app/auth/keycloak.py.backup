@@ -21,7 +21,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 # Security scheme
-security = HTTPBearer(auto_error=False)  # Don't auto-error for optional auth
+security = HTTPBearer()
 
 # Keycloak configuration from environment
 KEYCLOAK_URL = os.getenv("KEYCLOAK_URL", "http://keycloak:8080")
@@ -40,7 +40,6 @@ class User:
         self.email = email
         self.roles = roles
         self.user_id = user_id
-        self.id = user_id  # Alias for compatibility with layer generation
 
     def has_role(self, role: str) -> bool:
         """Check if user has a specific role"""
@@ -91,12 +90,11 @@ def verify_token(token: str, public_key: str) -> dict:
             public_key = f"-----BEGIN PUBLIC KEY-----\n{public_key}\n-----END PUBLIC KEY-----"
 
         # Decode and verify token
-        # NOTE: Disabled audience verification to accept tokens from both utip-api and utip-frontend clients
         payload = jwt.decode(
             token,
             public_key,
             algorithms=[ALGORITHM],
-            options={"verify_aud": False}  # Allow tokens from utip-frontend client
+            audience=KEYCLOAK_CLIENT_ID,
         )
 
         return payload
@@ -130,13 +128,6 @@ async def get_current_user(
     Raises:
         HTTPException: If token is invalid or missing
     """
-    if not credentials:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Missing authentication credentials",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-
     token = credentials.credentials
 
     # Get Keycloak public key
@@ -158,10 +149,6 @@ async def get_current_user(
     client_roles = resource_access.get(KEYCLOAK_CLIENT_ID, {}).get("roles", [])
     roles.extend(client_roles)
 
-    # Also check utip-frontend client roles
-    frontend_roles = resource_access.get("utip-frontend", {}).get("roles", [])
-    roles.extend(frontend_roles)
-
     # Check realm roles
     realm_access = payload.get("realm_access", {})
     realm_roles = realm_access.get("roles", [])
@@ -179,31 +166,6 @@ async def get_current_user(
         roles=list(set(roles)),  # Deduplicate roles
         user_id=user_id
     )
-
-
-async def get_current_user_optional(
-    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security)
-) -> Optional[User]:
-    """
-    Optional authentication - returns None if no token provided or token is invalid.
-
-    Use this for GET endpoints that should work without authentication (showing empty data).
-
-    Usage:
-        @app.get("/api/data")
-        async def get_data(user: Optional[User] = Depends(get_current_user_optional)):
-            # Works with or without auth
-            return {"data": []}
-    """
-    if not credentials:
-        logger.debug("No credentials provided - returning None user")
-        return None
-
-    try:
-        return await get_current_user(credentials)
-    except HTTPException as e:
-        logger.warning(f"Optional auth failed: {e.detail}")
-        return None
 
 
 def require_role(required_role: str):

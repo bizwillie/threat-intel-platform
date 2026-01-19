@@ -74,6 +74,8 @@ html {
   font-size: 16px;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
 body {
@@ -81,6 +83,14 @@ body {
   background-color: var(--color-background);
   color: var(--color-text-primary);
   line-height: 1.5;
+  min-height: 100vh;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+/* Ensure Angular app-root doesn't block scrolling */
+app-root {
+  display: block;
   min-height: 100vh;
 }
 
@@ -209,6 +219,45 @@ code {
 
 ::-webkit-scrollbar-thumb:hover {
   background: var(--color-surface-elevated);
+}
+
+/* ===========================
+   BUTTON EFFECTS
+   =========================== */
+
+/* Ripple effect for buttons */
+button.btn-icon,
+button.btn-primary,
+button.btn-secondary,
+button.btn-small,
+button.action-card {
+  position: relative;
+  overflow: hidden;
+
+  &::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 0;
+    height: 0;
+    border-radius: 50%;
+    background: rgba(59, 130, 246, 0.3);
+    transform: translate(-50%, -50%);
+    transition: width 0.6s ease, height 0.6s ease;
+  }
+
+  &:active:not(:disabled)::after {
+    width: 300px;
+    height: 300px;
+  }
+
+  /* Better disabled state */
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    filter: grayscale(0.3);
+  }
 }
 
 /* ===========================

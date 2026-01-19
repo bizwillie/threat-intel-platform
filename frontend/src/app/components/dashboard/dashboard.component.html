@@ -44,51 +44,86 @@
 
     <!-- Statistics Cards -->
     <div class="stats-grid">
-      <div class="stat-card glass-card">
-        <div class="stat-icon">🗺️</div>
-        <div class="stat-info">
-          <div class="stat-value">{{ stats.totalLayers }}</div>
-          <div class="stat-label">ATT&CK Layers</div>
-        </div>
-      </div>
+      <!-- Skeleton loaders while loading -->
+      <ng-container *ngIf="loading">
+        <app-skeleton-loader type="stat-card"></app-skeleton-loader>
+        <app-skeleton-loader type="stat-card"></app-skeleton-loader>
+        <app-skeleton-loader type="stat-card"></app-skeleton-loader>
+        <app-skeleton-loader type="stat-card"></app-skeleton-loader>
+      </ng-container>
 
-      <div class="stat-card glass-card">
-        <div class="stat-icon">📄</div>
-        <div class="stat-info">
-          <div class="stat-value">{{ stats.totalReports }}</div>
-          <div class="stat-label">Threat Reports</div>
+      <!-- Actual stat cards when loaded -->
+      <ng-container *ngIf="!loading">
+        <div class="stat-card glass-card">
+          <div class="stat-icon">🗺️</div>
+          <div class="stat-info">
+            <div class="stat-value">{{ stats.totalLayers }}</div>
+            <div class="stat-label">ATT&CK Layers</div>
+          </div>
         </div>
-      </div>
 
-      <div class="stat-card glass-card">
-        <div class="stat-icon">🔍</div>
-        <div class="stat-info">
-          <div class="stat-value">{{ stats.totalScans }}</div>
-          <div class="stat-label">Vulnerability Scans</div>
+        <div class="stat-card glass-card">
+          <div class="stat-icon">📄</div>
+          <div class="stat-info">
+            <div class="stat-value">{{ stats.totalReports }}</div>
+            <div class="stat-label">Threat Reports</div>
+          </div>
         </div>
-      </div>
 
-      <div class="stat-card glass-card">
-        <div class="stat-icon">🎯</div>
-        <div class="stat-info">
-          <div class="stat-value">{{ stats.criticalTechniques }}</div>
-          <div class="stat-label">Critical Techniques</div>
+        <div class="stat-card glass-card">
+          <div class="stat-icon">🔍</div>
+          <div class="stat-info">
+            <div class="stat-value">{{ stats.totalScans }}</div>
+            <div class="stat-label">Vulnerability Scans</div>
+          </div>
         </div>
-      </div>
+
+        <div class="stat-card glass-card">
+          <div class="stat-icon">🎯</div>
+          <div class="stat-info">
+            <div class="stat-value">{{ stats.criticalTechniques }}</div>
+            <div class="stat-label">Critical Techniques</div>
+          </div>
+        </div>
+      </ng-container>
     </div>
 
     <!-- Recent Layers Section -->
     <div class="recent-section">
-      <h3>Recent ATT&CK Layers</h3>
+      <div class="section-header">
+        <h3>Recent ATT&CK Layers</h3>
 
-      <div class="loading-indicator" *ngIf="loading">
-        <div class="spinner"></div>
-        <p>Loading layers...</p>
+        <!-- Search and Filter Controls -->
+        <div class="layers-controls" *ngIf="!loading && recentLayers.length > 0">
+          <input
+            type="search"
+            placeholder="Search layers..."
+            [(ngModel)]="searchTerm"
+            class="search-input"
+          >
+          <select [(ngModel)]="filterBy" class="filter-select">
+            <option value="all">All Layers</option>
+            <option value="mine">My Layers</option>
+          </select>
+          <select [(ngModel)]="sortBy" class="sort-select">
+            <option value="date-desc">Newest First</option>
+            <option value="date-asc">Oldest First</option>
+            <option value="name-asc">Name A-Z</option>
+          </select>
+        </div>
       </div>
 
-      <div class="layers-grid" *ngIf="!loading && recentLayers.length > 0">
+      <!-- Skeleton loaders while loading -->
+      <div class="layers-grid" *ngIf="loading">
+        <app-skeleton-loader type="card"></app-skeleton-loader>
+        <app-skeleton-loader type="card"></app-skeleton-loader>
+        <app-skeleton-loader type="card"></app-skeleton-loader>
+      </div>
+
+      <!-- Actual layer cards when loaded -->
+      <div class="layers-grid" *ngIf="!loading && filteredLayers.length > 0">
         <div
-          *ngFor="let layer of recentLayers"
+          *ngFor="let layer of filteredLayers"
           class="layer-card glass-card"
           (click)="openLayer(layer.id)"
         >
@@ -105,9 +140,28 @@
         </div>
       </div>
 
-      <div class="empty-state" *ngIf="!loading && recentLayers.length === 0">
-        <p class="text-secondary">No layers created yet.</p>
-        <p class="text-tertiary">Generate a layer from threat intel and vulnerability scans to get started.</p>
+      <!-- Enhanced Empty State -->
+      <div class="empty-state-enhanced" *ngIf="!loading && recentLayers.length === 0">
+        <div class="empty-icon">🗺️</div>
+        <h3>No Layers Yet</h3>
+        <p class="text-secondary">Start by uploading threat intel and vulnerability scans</p>
+        <div class="empty-actions">
+          <button class="btn-primary" disabled>
+            <span class="icon">📄</span>
+            Upload Intel Report
+          </button>
+          <button class="btn-secondary" disabled>
+            <span class="icon">🔍</span>
+            Upload Vuln Scan
+          </button>
+        </div>
+      </div>
+
+      <!-- No Search Results State -->
+      <div class="empty-state-enhanced" *ngIf="!loading && recentLayers.length > 0 && filteredLayers.length === 0">
+        <div class="empty-icon">🔍</div>
+        <h3>No Matching Layers</h3>
+        <p class="text-secondary">Try adjusting your search or filters</p>
       </div>
     </div>
 

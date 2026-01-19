@@ -1,0 +1,82 @@
+# Manual updates for backend GET endpoints
+
+# File: backend/app/routes/layers.py
+# Line 1: Add Optional import
+from typing import List, Optional
+
+# Line 113-116: Update list_layers to use optional auth
+@router.get("/", response_model=List[Layer])
+async def list_layers(
+    db: AsyncSession = Depends(get_db),
+    user: Optional[User] = Depends(get_current_user_optional)
+):
+
+# Line 145-149: Update get_layer to use optional auth  
+@router.get("/{layer_id}", response_model=LayerDetail)
+async def get_layer(
+    layer_id: str,
+    db: AsyncSession = Depends(get_db),
+    user: Optional[User] = Depends(get_current_user_optional)
+):
+
+# File: backend/app/routes/intel.py
+# Line 1: Add Optional import
+from typing import List, Optional
+
+# Line 172-175: Update list_threat_reports to use optional auth
+@router.get("/reports", response_model=List[ThreatReport])
+async def list_threat_reports(
+    db: AsyncSession = Depends(get_db),
+    user: Optional[User] = Depends(get_current_user_optional)
+):
+
+# Line 206-210: Update get_report_detail to use optional auth
+@router.get("/reports/{report_id}", response_model=ThreatReportDetail)
+async def get_report_detail(
+    report_id: str,
+    db: AsyncSession = Depends(get_db),
+    user: Optional[User] = Depends(get_current_user_optional)
+):
+
+# Line 268-272: Update get_report_status to use optional auth
+@router.get("/reports/{report_id}/status", response_model=ThreatReportStatusResponse)
+async def get_report_status(
+    report_id: str,
+    db: AsyncSession = Depends(get_db),
+    user: Optional[User] = Depends(get_current_user_optional)
+):
+
+# Line 308-312: Update get_extracted_techniques to use optional auth
+@router.get("/reports/{report_id}/techniques", response_model=List[ExtractedTechnique])
+async def get_extracted_techniques(
+    report_id: str,
+    db: AsyncSession = Depends(get_db),
+    user: Optional[User] = Depends(get_current_user_optional)
+):
+
+# File: backend/app/routes/vulnerabilities.py
+# Line 1: Add Optional import
+from typing import Optional
+
+# Line 173-176: Update list_vulnerability_scans to use optional auth
+@router.get("/scans", response_model=VulnScanListResponse)
+async def list_vulnerability_scans(
+    user: Optional[User] = Depends(get_current_user_optional),
+    db: AsyncSession = Depends(get_db)
+):
+
+# Line 213-217: Update get_vulnerability_scan to use optional auth
+@router.get("/scans/{scan_id}", response_model=VulnScanDetailResponse)
+async def get_vulnerability_scan(
+    scan_id: str,
+    user: Optional[User] = Depends(get_current_user_optional),
+    db: AsyncSession = Depends(get_db)
+):
+
+# Line 292-296: Update get_scan_techniques to use optional auth
+@router.get("/scans/{scan_id}/techniques", response_model=TechniqueListResponse)
+async def get_scan_techniques(
+    scan_id: str,
+    user: Optional[User] = Depends(get_current_user_optional),
+    db: AsyncSession = Depends(get_db)
+):

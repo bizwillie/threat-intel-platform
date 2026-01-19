@@ -5,7 +5,8 @@ Endpoints for uploading and managing vulnerability scans.
 """
 
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
-from app.auth import get_current_user, require_hunter, User
+from typing import Optional
+from app.auth import get_current_user, get_current_user_optional, require_hunter, User
 from app.schemas.vulnerability import (
     VulnScanResponse,
     VulnScanListResponse,
@@ -171,7 +172,7 @@ async def upload_vulnerability_scan(
 
 @router.get("/scans", response_model=VulnScanListResponse)
 async def list_vulnerability_scans(
-    user: User = Depends(get_current_user),
+    user: Optional[User] = Depends(get_current_user_optional),
     db: AsyncSession = Depends(get_db)
 ):
     """
@@ -212,7 +213,7 @@ async def list_vulnerability_scans(
 @router.get("/scans/{scan_id}", response_model=VulnScanDetailResponse)
 async def get_vulnerability_scan(
     scan_id: str,
-    user: User = Depends(get_current_user),
+    user: Optional[User] = Depends(get_current_user_optional),
     db: AsyncSession = Depends(get_db)
 ):
     """
@@ -291,7 +292,7 @@ async def get_vulnerability_scan(
 @router.get("/scans/{scan_id}/techniques", response_model=TechniqueListResponse)
 async def get_scan_techniques(
     scan_id: str,
-    user: User = Depends(get_current_user),
+    user: Optional[User] = Depends(get_current_user_optional),
     db: AsyncSession = Depends(get_db)
 ):
     """
@@ -355,7 +356,7 @@ async def get_scan_techniques(
 
 
 @router.get("/features", tags=["Phase 2.5"])
-async def get_feature_statistics(user: User = Depends(get_current_user)):
+async def get_feature_statistics(user: Optional[User] = Depends(get_current_user_optional)):
     """
     Get Phase 2.5 feature flag statistics.
 

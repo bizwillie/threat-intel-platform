@@ -8,13 +8,13 @@ import os
 import uuid
 import logging
 from datetime import datetime
-from typing import List
+from typing import Optional, List
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
 from fastapi.responses import JSONResponse
-from sqlalchemy import select, func
+from sqlalchemy import select, func, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.auth import get_current_user, require_hunter, User
+from app.auth import get_current_user, get_current_user_optional, require_hunter, User
 from app.database import get_db
 from app.schemas.intel import (
     ThreatReportUploadResponse,
@@ -105,10 +105,10 @@ async def upload_threat_report(
     # Create database record
     try:
         await db.execute(
-            """
+            text("""
             INSERT INTO threat_reports (id, filename, source_type, status, uploaded_by, created_at)
             VALUES (:id, :filename, :source_type, 'queued', :uploaded_by, :created_at)
-            """,
+            """),
             {
                 "id": str(report_id),
                 "filename": file.filename,
@@ -150,7 +150,7 @@ async def upload_threat_report(
         logger.error(f"Failed to queue Celery task: {e}")
         # Update status to failed
         await db.execute(
-            "UPDATE threat_reports SET status = 'failed', error_message = :error WHERE id = :id",
+            text("UPDATE threat_reports SET status = 'failed', error_message = :error WHERE id = :id"),
             {"error": "Failed to queue processing task", "id": str(report_id)}
         )
         await db.commit()
@@ -171,7 +171,7 @@ async def upload_threat_report(
 @router.get("/reports", response_model=List[ThreatReport])
 async def list_threat_reports(
     db: AsyncSession = Depends(get_db),
-    user: User = Depends(get_current_user)
+    user: Optional[User] = Depends(get_current_user_optional)
 ):
     """
     List all threat intelligence reports.
@@ -180,11 +180,11 @@ async def list_threat_reports(
         List of threat reports with metadata and processing status
     """
     result = await db.execute(
-        """
-        SELECT id, filename, source_type, status, uploaded_by, created_at, processed_at, error_message
+        text("""
+        SELECT id, filename, source_type, status, uploaded_by, created_at
         FROM threat_reports
         ORDER BY created_at DESC
-        """
+        """)
     )
 
     reports = []
@@ -196,8 +196,8 @@ async def list_threat_reports(
             status=row[3],
             uploaded_by=uuid.UUID(row[4]),
             created_at=row[5],
-            processed_at=row[6],
-            error_message=row[7]
+            processed_at=None,
+            error_message=None
         ))
 
     return reports
@@ -207,7 +207,7 @@ async def list_threat_reports(
 async def get_report_detail(
     report_id: str,
     db: AsyncSession = Depends(get_db),
-    user: User = Depends(get_current_user)
+    user: Optional[User] = Depends(get_current_user_optional)
 ):
     """
     Get detailed information about a threat report including extracted techniques.
@@ -217,11 +217,11 @@ async def get_report_detail(
     """
     # Get report
     result = await db.execute(
-        """
-        SELECT id, filename, source_type, status, uploaded_by, created_at, processed_at, error_message
+        text("""
+        SELECT id, filename, source_type, status, uploaded_by, created_at
         FROM threat_reports
         WHERE id = :id
-        """,
+        """),
         {"id": report_id}
     )
 
@@ -239,18 +239,18 @@ async def get_report_detail(
         status=row[3],
         uploaded_by=uuid.UUID(row[4]),
         created_at=row[5],
-        processed_at=row[6],
-        error_message=row[7]
+        processed_at=None,
+        error_message=None
     )
 
     # Get extracted techniques
     techniques_result = await db.execute(
-        """
+        text("""
         SELECT technique_id, confidence, evidence, extraction_method
         FROM extracted_techniques
         WHERE report_id = :report_id
         ORDER BY technique_id
-        """,
+        """),
         {"report_id": report_id}
     )
 
@@ -269,7 +269,7 @@ async def get_report_detail(
 async def get_report_status(
     report_id: str,
     db: AsyncSession = Depends(get_db),
-    user: User = Depends(get_current_user)
+    user: Optional[User] = Depends(get_current_user_optional)
 ):
     """
     Get processing status of a threat report.
@@ -278,12 +278,12 @@ async def get_report_status(
         Processing status: queued | processing | complete | failed
     """
     result = await db.execute(
-        """
-        SELECT filename, status, created_at, processed_at, error_message,
+        text("""
+        SELECT filename, status, created_at,
                (SELECT COUNT(*) FROM extracted_techniques WHERE report_id = :report_id) as tech_count
         FROM threat_reports
         WHERE id = :report_id
-        """,
+        """),
         {"report_id": report_id}
     )
 
@@ -299,9 +299,9 @@ async def get_report_status(
         filename=row[0],
         status=row[1],
         created_at=row[2],
-        processed_at=row[3],
-        error_message=row[4],
-        techniques_count=row[5]
+        processed_at=None,
+        error_message=None,
+        techniques_count=row[3]
     )
 
 
@@ -309,7 +309,7 @@ async def get_report_status(
 async def get_extracted_techniques(
     report_id: str,
     db: AsyncSession = Depends(get_db),
-    user: User = Depends(get_current_user)
+    user: Optional[User] = Depends(get_current_user_optional)
 ):
     """
     Get extracted MITRE ATT&CK techniques from a threat report.
@@ -319,7 +319,7 @@ async def get_extracted_techniques(
     """
     # Verify report exists
     report_result = await db.execute(
-        "SELECT id FROM threat_reports WHERE id = :id",
+        text("SELECT id FROM threat_reports WHERE id = :id"),
         {"id": report_id}
     )
 
@@ -331,12 +331,12 @@ async def get_extracted_techniques(
 
     # Get techniques
     result = await db.execute(
-        """
+        text("""
         SELECT technique_id, confidence, evidence, extraction_method
         FROM extracted_techniques
         WHERE report_id = :report_id
         ORDER BY technique_id
-        """,
+        """),
         {"report_id": report_id}
     )
 
@@ -364,29 +364,29 @@ async def get_processing_statistics(
     """
     # This could also call the Celery task, but we'll query directly for now
     status_result = await db.execute(
-        """
+        text("""
         SELECT status, COUNT(*) as count
         FROM threat_reports
         GROUP BY status
-        """
+        """)
     )
 
     status_breakdown = {row[0]: row[1] for row in status_result.fetchall()}
 
     total_techniques_result = await db.execute(
-        "SELECT COUNT(*) FROM extracted_techniques"
+        text("SELECT COUNT(*) FROM extracted_techniques")
     )
     total_techniques = total_techniques_result.scalar()
 
     avg_techniques_result = await db.execute(
-        """
+        text("""
         SELECT AVG(tech_count)
         FROM (
             SELECT COUNT(*) as tech_count
             FROM extracted_techniques
             GROUP BY report_id
         ) as subq
-        """
+        """)
     )
     avg_techniques = avg_techniques_result.scalar() or 0.0
 

@@ -6,13 +6,13 @@ Endpoints for generating MITRE ATT&CK layers with correlation logic.
 
 import logging
 import uuid
-from typing import List
+from typing import Optional, List
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import JSONResponse
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.auth import get_current_user, User
+from app.auth import get_current_user, get_current_user_optional, User
 from app.database import get_db
 from app.schemas.layer import (
     LayerGenerateRequest,
@@ -34,7 +34,7 @@ router = APIRouter(prefix="/api/v1/layers", tags=["Layers"])
 async def generate_layer(
     request: LayerGenerateRequest,
     db: AsyncSession = Depends(get_db),
-    user: User = Depends(get_current_user)
+    user: Optional[User] = Depends(get_current_user_optional)
 ):
     """
     Generate a MITRE ATT&CK layer by correlating intel and vulnerability data.
@@ -112,7 +112,7 @@ async def generate_layer(
 @router.get("/", response_model=List[Layer])
 async def list_layers(
     db: AsyncSession = Depends(get_db),
-    user: User = Depends(get_current_user)
+    user: Optional[User] = Depends(get_current_user_optional)
 ):
     """
     List all generated layers.
@@ -122,7 +122,7 @@ async def list_layers(
     """
     result = await db.execute(
         text("""
-            SELECT id, name, description, created_by, created_at
+            SELECT id, name, created_by, created_at
             FROM layers
             ORDER BY created_at DESC
         """)
@@ -133,9 +133,9 @@ async def list_layers(
         layers.append(Layer(
             id=uuid.UUID(row[0]),
             name=row[1],
-            description=row[2],
-            created_by=uuid.UUID(row[3]),
-            created_at=row[4]
+            description=None,
+            created_by=uuid.UUID(row[2]),
+            created_at=row[3]
         ))
 
     return layers
@@ -145,7 +145,7 @@ async def list_layers(
 async def get_layer(
     layer_id: str,
     db: AsyncSession = Depends(get_db),
-    user: User = Depends(get_current_user)
+    user: Optional[User] = Depends(get_current_user_optional)
 ):
     """
     Get a generated layer with all techniques.
@@ -156,7 +156,7 @@ async def get_layer(
     # Get layer metadata
     layer_result = await db.execute(
         text("""
-            SELECT id, name, description, created_by, created_at
+            SELECT id, name, created_by, created_at
             FROM layers
             WHERE id = :id
         """),
@@ -187,9 +187,9 @@ async def get_layer(
     layer_detail = LayerDetail(
         id=uuid.UUID(layer_row[0]),
         name=layer_row[1],
-        description=layer_row[2],
-        created_by=uuid.UUID(layer_row[3]),
-        created_at=layer_row[4],
+        description=None,
+        created_by=uuid.UUID(layer_row[2]),
+        created_at=layer_row[3],
         techniques=[LayerTechnique(**tech) for tech in techniques],
         technique_count=len(techniques),
         breakdown=breakdown
@@ -202,7 +202,7 @@ async def get_layer(
 async def export_layer_navigator(
     layer_id: str,
     db: AsyncSession = Depends(get_db),
-    user: User = Depends(get_current_user)
+    user: Optional[User] = Depends(get_current_user_optional)
 ):
     """
     Export layer to MITRE ATT&CK Navigator JSON format.
@@ -231,7 +231,7 @@ async def export_layer_navigator(
 async def delete_layer(
     layer_id: str,
     db: AsyncSession = Depends(get_db),
-    user: User = Depends(get_current_user)
+    user: Optional[User] = Depends(get_current_user_optional)
 ):
     """
     Delete a layer and all associated techniques.
