@@ -20,13 +20,20 @@ if DATABASE_URL.startswith("postgresql://"):
 else:
     ASYNC_DATABASE_URL = DATABASE_URL
 
-# Create async engine
+# PERFORMANCE: Connection pool configuration for production
+# pool_size: Number of connections to keep open permanently
+# max_overflow: Max temporary connections beyond pool_size
+# pool_timeout: Seconds to wait for a connection from pool
+# pool_recycle: Seconds before connection is recycled (prevents stale connections)
+# pool_pre_ping: Test connections before use (handles disconnects)
 engine = create_async_engine(
     ASYNC_DATABASE_URL,
     echo=False,  # Set to True for SQL query logging
     pool_pre_ping=True,  # Verify connections before using
-    pool_size=10,
-    max_overflow=20,
+    pool_size=20,  # Increased from 10 for production workloads
+    max_overflow=10,  # Reduced from 20 to limit connection spikes
+    pool_timeout=30,  # Wait 30s max for a connection
+    pool_recycle=1800,  # Recycle connections every 30 minutes
 )
 
 # Create async session factory

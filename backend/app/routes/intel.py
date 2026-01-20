@@ -2,6 +2,14 @@
 Threat Intelligence routes (Phase 3)
 
 Endpoints for uploading and managing threat intel documents.
+
+SECURITY: File upload hardened with:
+- Magic byte validation
+- Filename sanitization (path traversal prevention)
+- Path validation (defense in depth)
+- Rate limiting (10 uploads/minute)
+
+File validation is handled by the centralized FileUploadService.
 """
 
 import os
@@ -9,16 +17,18 @@ import uuid
 import logging
 from datetime import datetime
 from typing import Optional, List
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
-from fastapi.responses import JSONResponse
-from sqlalchemy import select, func, text
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Request, Query
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import get_current_user, get_current_user_optional, require_hunter, User
 from app.database import get_db
+from app.shared.rate_limiter import limiter
+from app.services.file_upload import FileUploadService
 from app.schemas.intel import (
     ThreatReportUploadResponse,
     ThreatReport,
+    ThreatReportListResponse,
     ThreatReportDetail,
     ThreatReportStatusResponse,
     ExtractedTechnique,
@@ -33,13 +43,15 @@ router = APIRouter(prefix="/api/v1/intel", tags=["Intelligence"])
 UPLOAD_DIR = os.getenv("UPLOAD_DIR", "/app/uploads")
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
-# Allowed file extensions
+# Allowed file extensions for threat intel
 ALLOWED_EXTENSIONS = {".pdf", ".json", ".stix", ".stix2", ".txt"}
 MAX_FILE_SIZE = 50 * 1024 * 1024  # 50 MB
 
 
 @router.post("/upload", response_model=ThreatReportUploadResponse, status_code=status.HTTP_202_ACCEPTED)
+@limiter.limit("10/minute")
 async def upload_threat_report(
+    request: Request,
     file: UploadFile = File(...),
     db: AsyncSession = Depends(get_db),
     user: User = Depends(require_hunter)
@@ -56,51 +68,47 @@ async def upload_threat_report(
 
     Requires: hunter role
     """
-    # Validate file extension
-    file_ext = os.path.splitext(file.filename)[1].lower()
-    if file_ext not in ALLOWED_EXTENSIONS:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"File type not allowed. Allowed: {', '.join(ALLOWED_EXTENSIONS)}"
-        )
-
     # Generate unique report ID
     report_id = uuid.uuid4()
 
-    # Save file to disk with unique name
-    safe_filename = f"{report_id}_{file.filename}"
-    file_path = os.path.join(UPLOAD_DIR, safe_filename)
-
     try:
-        # Read and validate file size
+        # Read file content
         content = await file.read()
-        if len(content) > MAX_FILE_SIZE:
+
+        # Validate using centralized FileUploadService
+        validation = FileUploadService.validate_upload(
+            filename=file.filename,
+            content=content,
+            allowed_extensions=ALLOWED_EXTENSIONS,
+            max_size=MAX_FILE_SIZE,
+            upload_dir=UPLOAD_DIR
+        )
+
+        if not validation.is_valid:
             raise HTTPException(
-                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-                detail=f"File too large. Maximum size: {MAX_FILE_SIZE / (1024 * 1024)} MB"
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=validation.error_message
             )
 
-        # Write to disk
-        with open(file_path, "wb") as f:
-            f.write(content)
+        # Create unique filename with report ID prefix
+        safe_filename = f"{report_id}_{validation.sanitized_filename}"
+        file_path = os.path.join(UPLOAD_DIR, safe_filename)
 
+        # Save file
+        await FileUploadService.save_file(content, safe_filename, UPLOAD_DIR)
         logger.info(f"Saved file {file.filename} to {file_path}")
 
+        # Get detected source type
+        source_type = validation.detected_type or "unknown"
+
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Failed to save file: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to save file"
         )
-
-    # Detect source type
-    source_type = "unknown"
-    if file_ext == ".pdf":
-        source_type = "pdf"
-    elif file_ext in [".json", ".stix", ".stix2"]:
-        source_type = "stix"
-    elif file_ext == ".txt":
-        source_type = "text"
 
     # Create database record
     try:
@@ -168,23 +176,32 @@ async def upload_threat_report(
     )
 
 
-@router.get("/reports", response_model=List[ThreatReport])
+@router.get("/reports", response_model=ThreatReportListResponse)
 async def list_threat_reports(
+    page: int = Query(1, ge=1, description="Page number"),
+    size: int = Query(50, ge=1, le=100, description="Items per page"),
     db: AsyncSession = Depends(get_db),
     user: Optional[User] = Depends(get_current_user_optional)
 ):
     """
-    List all threat intelligence reports.
+    List all threat intelligence reports with pagination.
+
+    **Pagination:** Use `page` and `size` query parameters.
 
     Returns:
-        List of threat reports with metadata and processing status
+        Paginated list of threat reports with metadata and processing status
     """
+    offset = (page - 1) * size
+
+    # Get paginated results
     result = await db.execute(
         text("""
         SELECT id, filename, source_type, status, uploaded_by, created_at
         FROM threat_reports
         ORDER BY created_at DESC
-        """)
+        OFFSET :offset LIMIT :limit
+        """),
+        {"offset": offset, "limit": size}
     )
 
     reports = []
@@ -200,7 +217,11 @@ async def list_threat_reports(
             error_message=None
         ))
 
-    return reports
+    # Get total count
+    total_result = await db.execute(text("SELECT COUNT(*) FROM threat_reports"))
+    total = total_result.scalar() or 0
+
+    return ThreatReportListResponse(reports=reports, total=total, page=page, size=size)
 
 
 @router.get("/reports/{report_id}", response_model=ThreatReportDetail)
@@ -354,7 +375,8 @@ async def get_extracted_techniques(
 
 @router.get("/statistics", response_model=ProcessingStatistics, tags=["Phase 3"])
 async def get_processing_statistics(
-    db: AsyncSession = Depends(get_current_user)
+    db: AsyncSession = Depends(get_db),
+    user: Optional[User] = Depends(get_current_user_optional)
 ):
     """
     Get statistics about threat report processing.

@@ -1,0 +1,49 @@
+{
+  "T1059.001": [
+    {"control_id": "2.3", "control": "Address Unauthorized Software", "safeguard": "Use application allowlisting to control PowerShell execution"},
+    {"control_id": "2.7", "control": "Allowlist Authorized Scripts", "safeguard": "Maintain allowlist of authorized PowerShell scripts"},
+    {"control_id": "8.2", "control": "Collect Audit Logs", "safeguard": "Enable PowerShell script block logging and transcription"}
+  ],
+  "T1059.003": [
+    {"control_id": "2.3", "control": "Address Unauthorized Software", "safeguard": "Restrict cmd.exe execution through application control"},
+    {"control_id": "8.2", "control": "Collect Audit Logs", "safeguard": "Enable command-line process auditing"}
+  ],
+  "T1566.001": [
+    {"control_id": "7.1", "control": "Establish Secure Configurations", "safeguard": "Configure email gateway to block dangerous attachment types"},
+    {"control_id": "9.2", "control": "Use DNS Filtering Services", "safeguard": "Block connections to known malicious domains"},
+    {"control_id": "10.1", "control": "Deploy Anti-Malware Software", "safeguard": "Scan all email attachments for malware"},
+    {"control_id": "14.2", "control": "Train Workforce Members", "safeguard": "Conduct phishing awareness training"}
+  ],
+  "T1566.002": [
+    {"control_id": "9.2", "control": "Use DNS Filtering Services", "safeguard": "Block DNS queries to malicious domains"},
+    {"control_id": "9.3", "control": "Deploy URL Filtering", "safeguard": "Block access to known phishing URLs"},
+    {"control_id": "14.2", "control": "Train Workforce Members", "safeguard": "Train users to identify and report phishing"}
+  ],
+  "T1071.001": [
+    {"control_id": "13.3", "control": "Deploy Network-Based IDS", "safeguard": "Monitor network traffic for C2 communication patterns"},
+    {"control_id": "13.10", "control": "Perform Application Layer Filtering", "safeguard": "Inspect HTTPS traffic through SSL/TLS decryption"}
+  ],
+  "T1486": [
+    {"control_id": "11.1", "control": "Establish Data Recovery Practices", "safeguard": "Maintain offline, encrypted backups"},
+    {"control_id": "11.2", "control": "Perform Automated Backups", "safeguard": "Automate regular backups of critical systems"},
+    {"control_id": "10.5", "control": "Malware Detection", "safeguard": "Deploy anti-ransomware endpoint protection"}
+  ],
+  "T1055": [
+    {"control_id": "10.5", "control": "Malware Detection", "safeguard": "Deploy EDR that detects process injection techniques"},
+    {"control_id": "8.5", "control": "Collect Detailed Audit Logs", "safeguard": "Log process creation and memory manipulation events"}
+  ],
+  "T1027": [
+    {"control_id": "10.1", "control": "Deploy Anti-Malware Software", "safeguard": "Use anti-malware with heuristic analysis"},
+    {"control_id": "8.2", "control": "Collect Audit Logs", "safeguard": "Log file creation and modification events"}
+  ],
+  "T1190": [
+    {"control_id": "7.1", "control": "Establish Secure Configurations", "safeguard": "Harden public-facing applications per CIS Benchmarks"},
+    {"control_id": "7.2", "control": "Maintain Secure Images", "safeguard": "Use hardened container images for applications"},
+    {"control_id": "7.3", "control": "Securely Configure Network Infrastructure", "safeguard": "Deploy WAF in front of web applications"}
+  ],
+  "T1078": [
+    {"control_id": "5.2", "control": "Use Unique Passwords", "safeguard": "Enforce unique passwords across all accounts"},
+    {"control_id": "5.3", "control": "Disable Dormant Accounts", "safeguard": "Automatically disable inactive accounts after 45 days"},
+    {"control_id": "6.3", "control": "Require MFA", "safeguard": "Enforce multi-factor authentication for all accounts"}
+  ]
+}

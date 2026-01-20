@@ -8,12 +8,18 @@ Non-negotiable constraints:
 - OIDC protocol
 - JWT Bearer tokens
 - Role-based access control (analyst, admin, hunter)
+
+SECURITY FIXES:
+- JWT audience verification enabled (prevents cross-service token replay)
+- Public key caching (prevents DoS via Keycloak exhaustion)
 """
 
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from jose import JWTError, jwt
 from typing import Optional, List
+from cachetools import TTLCache
+import asyncio
 import httpx
 import os
 import logging
@@ -27,9 +33,14 @@ security = HTTPBearer(auto_error=False)  # Don't auto-error for optional auth
 KEYCLOAK_URL = os.getenv("KEYCLOAK_URL", "http://keycloak:8080")
 KEYCLOAK_REALM = os.getenv("KEYCLOAK_REALM", "utip")
 KEYCLOAK_CLIENT_ID = os.getenv("KEYCLOAK_CLIENT_ID", "utip-api")
+KEYCLOAK_AUDIENCE = os.getenv("KEYCLOAK_AUDIENCE", KEYCLOAK_CLIENT_ID)
 
 # JWT validation settings
 ALGORITHM = "RS256"
+
+# Cache for Keycloak public key (1 hour TTL)
+_key_cache: TTLCache = TTLCache(maxsize=1, ttl=3600)
+_cache_lock = asyncio.Lock()
 
 
 class User:
@@ -54,26 +65,49 @@ async def get_keycloak_public_key() -> str:
     """
     Fetch Keycloak public key for JWT verification.
 
-    In production, this should be cached to avoid repeated requests.
+    SECURITY: Key is cached for 1 hour to:
+    - Prevent DoS via Keycloak exhaustion
+    - Reduce latency on every request
+    - Prevent single point of failure
     """
-    try:
-        url = f"{KEYCLOAK_URL}/realms/{KEYCLOAK_REALM}"
-        async with httpx.AsyncClient() as client:
-            response = await client.get(url, timeout=10.0)
-            response.raise_for_status()
-            realm_info = response.json()
-            return realm_info.get("public_key")
-    except Exception as e:
-        logger.error(f"Failed to fetch Keycloak public key: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Authentication service unavailable"
-        )
+    async with _cache_lock:
+        # Check cache first
+        cached_key = _key_cache.get("public_key")
+        if cached_key:
+            logger.debug("Using cached Keycloak public key")
+            return cached_key
+
+        # Fetch from Keycloak
+        try:
+            url = f"{KEYCLOAK_URL}/realms/{KEYCLOAK_REALM}"
+            async with httpx.AsyncClient() as client:
+                response = await client.get(url, timeout=10.0)
+                response.raise_for_status()
+                realm_info = response.json()
+                public_key = realm_info.get("public_key")
+
+                if public_key:
+                    # Cache the key
+                    _key_cache["public_key"] = public_key
+                    logger.info("Fetched and cached Keycloak public key")
+                    return public_key
+                else:
+                    raise ValueError("No public key in Keycloak response")
+
+        except Exception as e:
+            logger.error(f"Failed to fetch Keycloak public key: {e}")
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Authentication service unavailable"
+            )
 
 
 def verify_token(token: str, public_key: str) -> dict:
     """
     Verify JWT token signature and extract claims.
+
+    SECURITY: Audience verification is ENABLED to prevent cross-service
+    token replay attacks. Only tokens issued for this API are accepted.
 
     Args:
         token: JWT token string
@@ -83,20 +117,22 @@ def verify_token(token: str, public_key: str) -> dict:
         Decoded token claims
 
     Raises:
-        HTTPException: If token is invalid
+        HTTPException: If token is invalid or intended for different audience
     """
     try:
         # Add PEM headers if not present
         if not public_key.startswith("-----BEGIN"):
             public_key = f"-----BEGIN PUBLIC KEY-----\n{public_key}\n-----END PUBLIC KEY-----"
 
-        # Decode and verify token
-        # NOTE: Disabled audience verification to accept tokens from both utip-api and utip-frontend clients
+        # Decode and verify token with audience validation
+        # SECURITY: Audience verification prevents tokens intended for other
+        # services in the same Keycloak realm from being used here
         payload = jwt.decode(
             token,
             public_key,
             algorithms=[ALGORITHM],
-            options={"verify_aud": False}  # Allow tokens from utip-frontend client
+            audience=KEYCLOAK_AUDIENCE,
+            options={"verify_aud": True}
         )
 
         return payload

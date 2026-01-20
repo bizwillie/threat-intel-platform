@@ -2,24 +2,28 @@
 Layer generation and correlation routes (Phase 5)
 
 Endpoints for generating MITRE ATT&CK layers with correlation logic.
+
+SECURITY: Rate limiting applied to expensive operations.
 """
 
 import logging
 import uuid
 from typing import Optional, List
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request, Query
 from fastapi.responses import JSONResponse
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import get_current_user, get_current_user_optional, User
 from app.database import get_db
+from app.shared.rate_limiter import limiter
 from app.schemas.layer import (
     LayerGenerateRequest,
     LayerGenerateResponse,
     LayerBreakdown,
     LayerStatistics,
     Layer,
+    LayerListResponse,
     LayerDetail,
     LayerTechnique,
 )
@@ -31,8 +35,10 @@ router = APIRouter(prefix="/api/v1/layers", tags=["Layers"])
 
 
 @router.post("/generate", response_model=LayerGenerateResponse, status_code=status.HTTP_201_CREATED)
+@limiter.limit("5/minute")
 async def generate_layer(
-    request: LayerGenerateRequest,
+    request: Request,
+    layer_request: LayerGenerateRequest,
     db: AsyncSession = Depends(get_db),
     user: Optional[User] = Depends(get_current_user_optional)
 ):
@@ -72,10 +78,10 @@ async def generate_layer(
     }
     ```
     """
-    logger.info(f"User {user.username} generating layer: {request.name}")
+    logger.info(f"User {user.username} generating layer: {layer_request.name}")
 
     # Validate that at least one source is provided
-    if not request.intel_report_ids and not request.vuln_scan_ids:
+    if not layer_request.intel_report_ids and not layer_request.vuln_scan_ids:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="At least one intel report or vulnerability scan must be provided"
@@ -85,10 +91,10 @@ async def generate_layer(
         # Call correlation engine
         result = await CorrelationEngine.generate_layer(
             db=db,
-            name=request.name,
-            description=request.description,
-            intel_report_ids=request.intel_report_ids,
-            vuln_scan_ids=request.vuln_scan_ids,
+            name=layer_request.name,
+            description=layer_request.description,
+            intel_report_ids=layer_request.intel_report_ids,
+            vuln_scan_ids=layer_request.vuln_scan_ids,
             created_by=user.id
         )
 
@@ -109,23 +115,31 @@ async def generate_layer(
         )
 
 
-@router.get("/", response_model=List[Layer])
+@router.get("/", response_model=LayerListResponse)
 async def list_layers(
+    page: int = Query(1, ge=1, description="Page number"),
+    size: int = Query(50, ge=1, le=100, description="Items per page"),
     db: AsyncSession = Depends(get_db),
     user: Optional[User] = Depends(get_current_user_optional)
 ):
     """
-    List all generated layers.
+    List all generated layers with pagination.
+
+    **Pagination:** Use `page` and `size` query parameters.
 
     Returns:
-        List of layers with metadata (no technique details)
+        Paginated list of layers with metadata (no technique details)
     """
+    offset = (page - 1) * size
+
     result = await db.execute(
         text("""
             SELECT id, name, created_by, created_at
             FROM layers
             ORDER BY created_at DESC
-        """)
+            OFFSET :offset LIMIT :limit
+        """),
+        {"offset": offset, "limit": size}
     )
 
     layers = []
@@ -138,7 +152,11 @@ async def list_layers(
             created_at=row[3]
         ))
 
-    return layers
+    # Get total count
+    total_result = await db.execute(text("SELECT COUNT(*) FROM layers"))
+    total = total_result.scalar() or 0
+
+    return LayerListResponse(layers=layers, total=total, page=page, size=size)
 
 
 @router.get("/{layer_id}", response_model=LayerDetail)

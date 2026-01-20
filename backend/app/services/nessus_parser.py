@@ -3,9 +3,14 @@ Nessus Parser Service
 
 Parses .nessus XML files to extract vulnerability data.
 Handles Nessus v2 XML format with graceful error handling.
+
+SECURITY: Uses defusedxml to prevent XXE (XML External Entity) attacks.
+Standard xml.etree.ElementTree is vulnerable to XXE which could allow
+attackers to read arbitrary files from the server.
 """
 
-import xml.etree.ElementTree as ET
+from defusedxml import ElementTree as ET
+from defusedxml.ElementTree import ParseError
 from typing import List, Dict, Optional
 from datetime import datetime
 import logging
@@ -40,11 +45,15 @@ class NessusParser:
             NessusParseError: If file is malformed or not valid Nessus format
         """
         try:
-            # Parse XML
+            # Parse XML using defusedxml (prevents XXE attacks)
             root = ET.fromstring(file_content)
-        except ET.ParseError as e:
+        except ParseError as e:
             logger.error(f"Failed to parse XML for {filename}: {e}")
             raise NessusParseError(f"Invalid XML format: {e}")
+        except Exception as e:
+            # Catch any defusedxml security exceptions (DTDForbidden, EntitiesForbidden, etc.)
+            logger.error(f"Security violation parsing {filename}: {e}")
+            raise NessusParseError(f"XML security violation detected: {e}")
 
         # Validate it's a Nessus file
         if root.tag != "NessusClientData_v2":

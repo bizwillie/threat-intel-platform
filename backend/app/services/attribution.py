@@ -16,7 +16,6 @@ This is fully deterministic and auditable - no black box LLM inference.
 
 import logging
 from typing import List, Dict, Optional
-from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text

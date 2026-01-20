@@ -1,0 +1,102 @@
+{
+  "T1059.001": [
+    {
+      "rule_name": "PowerShell Execution Policy Bypass",
+      "description": "Detects PowerShell executed with -ExecutionPolicy Bypass flag",
+      "log_source": "Windows Security Event Log (4688)",
+      "detection": "CommandLine contains '-ExecutionPolicy Bypass' OR '-exec bypass' OR '-ep bypass'"
+    },
+    {
+      "rule_name": "PowerShell Download Cradle",
+      "description": "Detects PowerShell downloading files from web",
+      "log_source": "PowerShell Script Block Logging (4104)",
+      "detection": "ScriptBlockText contains 'Invoke-WebRequest' OR 'IWR' OR 'wget' OR 'curl' OR 'DownloadString'"
+    },
+    {
+      "rule_name": "Encoded PowerShell Command",
+      "description": "Detects Base64-encoded PowerShell commands",
+      "log_source": "Windows Security Event Log (4688)",
+      "detection": "CommandLine contains '-EncodedCommand' OR '-enc' OR '-e'"
+    }
+  ],
+  "T1059.003": [
+    {
+      "rule_name": "CMD.exe Suspicious Execution",
+      "description": "Detects cmd.exe executed with suspicious flags",
+      "log_source": "Windows Security Event Log (4688)",
+      "detection": "Image ends with 'cmd.exe' AND (CommandLine contains '/c' OR '/k' OR '/r')"
+    }
+  ],
+  "T1566.001": [
+    {
+      "rule_name": "Office Macro Execution",
+      "description": "Detects Office documents executing macros",
+      "log_source": "Windows Security Event Log (4688)",
+      "detection": "ParentImage contains 'WINWORD.EXE' OR 'EXCEL.EXE' AND Image contains 'cmd.exe' OR 'powershell.exe'"
+    },
+    {
+      "rule_name": "Suspicious Email Attachment Opened",
+      "description": "Detects execution of files from temporary email locations",
+      "log_source": "Windows Security Event Log (4688)",
+      "detection": "CommandLine contains '\\AppData\\Local\\Microsoft\\Windows\\INetCache\\'"
+    }
+  ],
+  "T1071.001": [
+    {
+      "rule_name": "Suspicious Outbound HTTPS Connection",
+      "description": "Detects uncommon processes making HTTPS connections",
+      "log_source": "Network Connection Logs / EDR",
+      "detection": "Process NOT IN (browser list) AND DestinationPort = 443 AND ConnectionDuration > 300s"
+    },
+    {
+      "rule_name": "Beaconing Activity Detected",
+      "description": "Detects regular periodic outbound connections (C2 beaconing)",
+      "log_source": "Network Flow Logs",
+      "detection": "Regular connection intervals (e.g., every 60s ±5s) to same destination"
+    }
+  ],
+  "T1486": [
+    {
+      "rule_name": "Rapid File Encryption Activity",
+      "description": "Detects mass file modifications (ransomware behavior)",
+      "log_source": "File System Auditing / EDR",
+      "detection": "File modifications > 100 files in < 60 seconds with file renames"
+    },
+    {
+      "rule_name": "Ransomware Note Creation",
+      "description": "Detects creation of ransom notes",
+      "log_source": "File System Auditing",
+      "detection": "File created with name containing 'DECRYPT' OR 'README' OR 'RANSOM' with .txt extension"
+    }
+  ],
+  "T1055": [
+    {
+      "rule_name": "Process Injection via CreateRemoteThread",
+      "description": "Detects process injection using CreateRemoteThread API",
+      "log_source": "EDR / Sysmon Event 8",
+      "detection": "CreateRemoteThread detected with target process different from source"
+    }
+  ],
+  "T1190": [
+    {
+      "rule_name": "Web Application Exploit Attempt",
+      "description": "Detects common web exploit patterns in HTTP requests",
+      "log_source": "WAF / Web Server Logs",
+      "detection": "HTTP request contains SQL injection patterns OR command injection OR path traversal"
+    }
+  ],
+  "T1078": [
+    {
+      "rule_name": "Impossible Travel Login",
+      "description": "Detects logins from geographically impossible locations",
+      "log_source": "Authentication Logs",
+      "detection": "User login from IP1 (Location A) and IP2 (Location B) within impossible timeframe"
+    },
+    {
+      "rule_name": "After-Hours Login from Privileged Account",
+      "description": "Detects privileged account logins outside business hours",
+      "log_source": "Windows Security Event Log (4624)",
+      "detection": "Logon Type = 3 OR 10 AND Account in privileged group AND Time outside 08:00-18:00"
+    }
+  ]
+}

@@ -199,6 +199,7 @@ export class ApiService {
 
   /**
    * Generate a new layer from intel reports and vulnerability scans
+   * TODO: Build layer generation UI - connect to layer creation form
    */
   generateLayer(request: LayerGenerateRequest): Observable<LayerGenerateResponse> {
     return this.http.post<LayerGenerateResponse>(`${this.apiUrl}/layers/generate`, request, {
@@ -210,6 +211,7 @@ export class ApiService {
 
   /**
    * Delete a layer
+   * TODO: Build layer deletion UI - add delete button to layer list/detail views
    */
   deleteLayer(layerId: string): Observable<void> {
     return this.http.delete<void>(`${this.apiUrl}/layers/${layerId}`, {
@@ -225,6 +227,7 @@ export class ApiService {
 
   /**
    * Upload a threat intelligence report
+   * TODO: Build intel upload UI - create file upload component for threat reports
    */
   uploadIntelReport(file: File): Observable<{ report_id: string; status: string }> {
     const formData = new FormData();
@@ -257,6 +260,7 @@ export class ApiService {
 
   /**
    * Get extracted techniques from a specific report
+   * TODO: Build report details UI - show techniques extracted from each report
    */
   getReportTechniques(reportId: string): Observable<ExtractedTechnique[]> {
     return this.http.get<ExtractedTechnique[]>(`${this.apiUrl}/intel/reports/${reportId}/techniques`, {
@@ -272,6 +276,7 @@ export class ApiService {
 
   /**
    * Upload a Nessus vulnerability scan
+   * TODO: Build vuln upload UI - create file upload component for Nessus scans
    */
   uploadVulnerabilityScan(file: File): Observable<{ scan_id: string; vulnerabilities_found: number }> {
     const formData = new FormData();
@@ -304,6 +309,7 @@ export class ApiService {
 
   /**
    * Get techniques mapped from a specific vulnerability scan
+   * TODO: Build scan details UI - show CVE-to-technique mappings per scan
    */
   getScanTechniques(scanId: string): Observable<TechniqueResponse[]> {
     return this.http.get<TechniqueResponse[]>(`${this.apiUrl}/vuln/scans/${scanId}/techniques`, {
@@ -332,6 +338,7 @@ export class ApiService {
 
   /**
    * Get all threat actors
+   * TODO: Build actors list UI - create threat actor directory/browser
    */
   getThreatActors(): Observable<ThreatActor[]> {
     return this.http.get<ThreatActor[]>(`${this.apiUrl}/attribution/actors`, {
@@ -359,6 +366,7 @@ export class ApiService {
 
   /**
    * Get comprehensive remediation for all techniques in a layer
+   * TODO: Build layer remediation UI - comprehensive remediation report view
    */
   getLayerRemediation(layerId: string): Observable<any> {
     return this.http.get<any>(
@@ -371,6 +379,7 @@ export class ApiService {
 
   /**
    * Get remediation coverage statistics
+   * TODO: Build coverage dashboard UI - remediation coverage metrics/charts
    */
   getRemediationCoverage(): Observable<any> {
     return this.http.get<any>(
@@ -387,6 +396,7 @@ export class ApiService {
 
   /**
    * Health check endpoint
+   * TODO: Build health status indicator - show API connectivity status in UI
    */
   healthCheck(): Observable<any> {
     return this.http.get(`${this.apiUrl.replace('/api/v1', '')}/health`).pipe(

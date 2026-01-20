@@ -2,11 +2,22 @@
 Vulnerability management routes (Phase 2)
 
 Endpoints for uploading and managing vulnerability scans.
+
+SECURITY: Rate limiting applied to upload endpoints.
 """
 
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
+import uuid
+import logging
+from datetime import datetime
 from typing import Optional
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Request, Query
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, func
+from sqlalchemy.orm import selectinload
+
 from app.auth import get_current_user, get_current_user_optional, require_hunter, User
+from app.database import get_db
+from app.shared.rate_limiter import limiter
 from app.schemas.vulnerability import (
     VulnScanResponse,
     VulnScanListResponse,
@@ -17,12 +28,6 @@ from app.services.nessus_parser import NessusParser, NessusParseError
 from app.services.cve_mapper import CVEMapper, CVEMapperError
 from app.models.database import VulnerabilityScan, Vulnerability, CVETechnique
 from app.models.database import ProcessingStatus
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
-from app.database import get_db
-import uuid
-from datetime import datetime
-import logging
 
 logger = logging.getLogger(__name__)
 
@@ -30,7 +35,9 @@ router = APIRouter(prefix="/api/v1/vuln", tags=["Vulnerabilities"])
 
 
 @router.post("/upload", response_model=VulnScanResponse)
+@limiter.limit("10/minute")
 async def upload_vulnerability_scan(
+    request: Request,
     file: UploadFile = File(...),
     user: User = Depends(require_hunter),
     db: AsyncSession = Depends(get_db)
@@ -172,30 +179,57 @@ async def upload_vulnerability_scan(
 
 @router.get("/scans", response_model=VulnScanListResponse)
 async def list_vulnerability_scans(
+    page: int = Query(1, ge=1, description="Page number"),
+    size: int = Query(50, ge=1, le=100, description="Items per page"),
     user: Optional[User] = Depends(get_current_user_optional),
     db: AsyncSession = Depends(get_db)
 ):
     """
     List all vulnerability scans with summary statistics.
 
+    **Pagination:** Use `page` and `size` query parameters.
+
     Returns:
         List of scans with metadata and vulnerability counts
     """
-    result = await db.execute(
-        select(VulnerabilityScan).order_by(VulnerabilityScan.created_at.desc())
+    # PERFORMANCE: Single aggregation query instead of N+1
+    # This query gets scan metadata plus aggregated vulnerability stats in one trip
+    offset = (page - 1) * size
+
+    # Subquery for vulnerability counts per scan
+    vuln_stats = (
+        select(
+            Vulnerability.scan_id,
+            func.count(Vulnerability.id).label('vuln_count'),
+            func.count(func.distinct(Vulnerability.cve_id)).label('unique_cve_count')
+        )
+        .group_by(Vulnerability.scan_id)
+        .subquery()
     )
-    scans = result.scalars().all()
+
+    # Main query with left join to get scans even if they have no vulnerabilities
+    result = await db.execute(
+        select(
+            VulnerabilityScan,
+            func.coalesce(vuln_stats.c.vuln_count, 0).label('vuln_count'),
+            func.coalesce(vuln_stats.c.unique_cve_count, 0).label('unique_cve_count')
+        )
+        .outerjoin(vuln_stats, VulnerabilityScan.id == vuln_stats.c.scan_id)
+        .order_by(VulnerabilityScan.created_at.desc())
+        .offset(offset)
+        .limit(size)
+    )
+    rows = result.all()
+
+    # Get total count for pagination
+    total_result = await db.execute(select(func.count(VulnerabilityScan.id)))
+    total = total_result.scalar() or 0
 
     scan_list = []
-    for scan in scans:
-        # Count vulnerabilities for this scan
-        vuln_result = await db.execute(
-            select(Vulnerability).where(Vulnerability.scan_id == scan.id)
-        )
-        vulnerabilities = vuln_result.scalars().all()
-
-        # Count unique CVEs
-        unique_cves = set(v.cve_id for v in vulnerabilities)
+    for row in rows:
+        scan = row[0]  # VulnerabilityScan object
+        vuln_count = row[1]
+        unique_cve_count = row[2]
 
         scan_list.append({
             "scan_id": str(scan.id),
@@ -203,11 +237,11 @@ async def list_vulnerability_scans(
             "scan_date": scan.scan_date,
             "uploaded_by": scan.uploaded_by,
             "created_at": scan.created_at,
-            "vulnerability_count": len(vulnerabilities),
-            "unique_cve_count": len(unique_cves),
+            "vulnerability_count": vuln_count,
+            "unique_cve_count": unique_cve_count,
         })
 
-    return VulnScanListResponse(scans=scan_list, total=len(scan_list))
+    return VulnScanListResponse(scans=scan_list, total=total, page=page, size=size)
 
 
 @router.get("/scans/{scan_id}", response_model=VulnScanDetailResponse)

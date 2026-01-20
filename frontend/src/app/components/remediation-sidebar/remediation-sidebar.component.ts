@@ -4,10 +4,13 @@
  * Displays actionable remediation guidance for a selected technique
  * including MITRE Mitigations, CIS Controls, Detection Rules, and
  * hardening guidance.
+ *
+ * SECURITY: Uses takeUntilDestroyed to prevent memory leaks.
  */
 
-import { Component, Input, Output, EventEmitter, OnInit, inject, OnChanges } from '@angular/core';
+import { Component, Input, Output, EventEmitter, OnInit, inject, OnChanges, DestroyRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { ApiService, TechniqueRemediation } from '../../services/api.service';
 
 @Component({
@@ -22,6 +25,7 @@ export class RemediationSidebarComponent implements OnInit, OnChanges {
   @Output() close = new EventEmitter<void>();
 
   private apiService = inject(ApiService);
+  private destroyRef = inject(DestroyRef);
 
   remediation: TechniqueRemediation | null = null;
   loading = false;
@@ -45,21 +49,23 @@ export class RemediationSidebarComponent implements OnInit, OnChanges {
     this.loading = true;
     this.error = '';
 
-    this.apiService.getTechniqueRemediation(this.techniqueId).subscribe({
-      next: (data) => {
-        this.remediation = data;
-        this.loading = false;
-      },
-      error: (err) => {
-        console.error('Error loading remediation:', err);
-        if (err.status === 404) {
-          this.error = `No remediation guidance available for technique ${this.techniqueId}`;
-        } else {
-          this.error = 'Failed to load remediation guidance';
+    this.apiService.getTechniqueRemediation(this.techniqueId)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (data) => {
+          this.remediation = data;
+          this.loading = false;
+        },
+        error: (err) => {
+          console.error('Error loading remediation:', err);
+          if (err.status === 404) {
+            this.error = `No remediation guidance available for technique ${this.techniqueId}`;
+          } else {
+            this.error = 'Failed to load remediation guidance';
+          }
+          this.loading = false;
         }
-        this.loading = false;
-      }
-    });
+      });
   }
 
   onClose(): void {

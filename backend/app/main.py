@@ -9,11 +9,22 @@ Responsibilities:
 - Layer generation
 - Attribution orchestration
 - Authentication & authorization
+
+SECURITY: Rate limiting enabled via slowapi to prevent:
+- Brute force attacks
+- DoS via resource exhaustion
+- API abuse
 """
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
 import logging
+
+# Import shared utilities (centralized rate limiter)
+from app.shared.rate_limiter import limiter
 
 # Import routers
 from app.routes import health_router, intel_router, vuln_router, layer_router, attribution_router, remediation_router
@@ -33,6 +44,10 @@ app = FastAPI(
     docs_url="/docs",
     redoc_url="/redoc"
 )
+
+# Attach rate limiter to app state and add exception handler
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # Include routers
 app.include_router(health_router)

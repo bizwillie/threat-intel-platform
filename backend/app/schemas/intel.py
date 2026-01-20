@@ -39,6 +39,15 @@ class ThreatReport(BaseModel):
     error_message: Optional[str] = None
 
 
+class ThreatReportListResponse(BaseModel):
+    """Paginated list of threat reports."""
+
+    reports: List[ThreatReport]
+    total: int
+    page: int = 1
+    size: int = 50
+
+
 class ThreatReportDetail(ThreatReport):
     """Detailed threat report with extracted techniques."""
 

@@ -16,7 +16,7 @@ Critical Tables:
 9. actor_techniques - Actor TTPs
 """
 
-from sqlalchemy import Column, String, Integer, Float, DateTime, ForeignKey, Text, Enum as SQLEnum, Index
+from sqlalchemy import Column, String, Integer, Float, DateTime, ForeignKey, Text, Enum as SQLEnum, Index, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship
@@ -147,10 +147,11 @@ class Vulnerability(Base):
     # Relationship to scan
     scan = relationship("VulnerabilityScan", back_populates="vulnerabilities")
 
-    # Index for fast CVE lookups
+    # Index for fast lookups
     __table_args__ = (
         Index("idx_vulnerabilities_cve_id", "cve_id"),
         Index("idx_vulnerabilities_scan_id", "scan_id"),
+        Index("idx_vulnerabilities_scan_cve", "scan_id", "cve_id"),  # Composite index for join queries
     )
 
 
@@ -172,10 +173,11 @@ class CVETechnique(Base):
     confidence = Column(Float, nullable=False)  # 0.0 to 1.0
     source = Column(String(50), nullable=False)  # "nvd", "capec", "manual"
 
-    # Index for fast lookups
+    # Index for fast lookups + unique constraint to prevent duplicates
     __table_args__ = (
         Index("idx_cve_techniques_cve_id", "cve_id"),
         Index("idx_cve_techniques_technique_id", "technique_id"),
+        UniqueConstraint("cve_id", "technique_id", "source", name="uq_cve_techniques"),
     )
 
 
@@ -267,8 +269,9 @@ class ActorTechnique(Base):
     # Relationship to actor
     actor = relationship("ThreatActor", back_populates="actor_techniques")
 
-    # Index for fast lookups
+    # Index for fast lookups + unique constraint to prevent duplicates
     __table_args__ = (
         Index("idx_actor_techniques_actor_id", "actor_id"),
         Index("idx_actor_techniques_technique_id", "technique_id"),
+        UniqueConstraint("actor_id", "technique_id", name="uq_actor_techniques"),
     )

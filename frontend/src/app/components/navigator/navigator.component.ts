@@ -3,11 +3,15 @@
  *
  * Main MITRE ATT&CK matrix visualization with integrated
  * attribution and remediation panels.
+ *
+ * SECURITY: Uses takeUntilDestroyed to prevent memory leaks
+ * from unsubscribed observables.
  */
 
-import { Component, OnInit, inject } from '@angular/core';
+import { Component, OnInit, inject, DestroyRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Router } from '@angular/router';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { AuthService } from '../../services/auth.service';
 import { ApiService, LayerDetail } from '../../services/api.service';
 import { AttributionPanelComponent } from '../attribution-panel/attribution-panel.component';
@@ -28,6 +32,7 @@ export class NavigatorComponent implements OnInit {
   private authService = inject(AuthService);
   private apiService = inject(ApiService);
   private router = inject(Router);
+  private destroyRef = inject(DestroyRef);
 
   currentLayer: LayerDetail | null = null;
   selectedTechniqueId: string | null = null;
@@ -51,38 +56,42 @@ export class NavigatorComponent implements OnInit {
     this.loading = true;
     this.error = '';
 
-    this.apiService.getLayers().subscribe({
-      next: (layers) => {
-        console.log('Loaded layers:', layers);
-        // Load the first layer if available
-        if (layers.length > 0) {
-          this.loadLayer(layers[0].id);
+    this.apiService.getLayers()
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (layers) => {
+          console.log('Loaded layers:', layers);
+          // Load the first layer if available
+          if (layers.length > 0) {
+            this.loadLayer(layers[0].id);
+          }
+          this.loading = false;
+        },
+        error: (err) => {
+          console.error('Error loading layers:', err);
+          this.error = 'Failed to load layers';
+          this.loading = false;
         }
-        this.loading = false;
-      },
-      error: (err) => {
-        console.error('Error loading layers:', err);
-        this.error = 'Failed to load layers';
-        this.loading = false;
-      }
-    });
+      });
   }
 
   loadLayer(layerId: string): void {
     this.loading = true;
 
-    this.apiService.getLayer(layerId).subscribe({
-      next: (layer) => {
-        this.currentLayer = layer;
-        console.log('Loaded layer:', layer);
-        this.loading = false;
-      },
-      error: (err) => {
-        console.error('Error loading layer:', err);
-        this.error = 'Failed to load layer';
-        this.loading = false;
-      }
-    });
+    this.apiService.getLayer(layerId)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (layer) => {
+          this.currentLayer = layer;
+          console.log('Loaded layer:', layer);
+          this.loading = false;
+        },
+        error: (err) => {
+          console.error('Error loading layer:', err);
+          this.error = 'Failed to load layer';
+          this.loading = false;
+        }
+      });
   }
 
   toggleAttributionPanel(): void {

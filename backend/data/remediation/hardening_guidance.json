@@ -1,0 +1,23 @@
+{
+  "T1059.001": "**PowerShell Hardening:**\n1. Enable PowerShell Constrained Language Mode\n2. Set execution policy to AllSigned or RemoteSigned\n3. Enable PowerShell Script Block Logging (Event ID 4104)\n4. Enable PowerShell Transcription logging\n5. Use AppLocker to restrict PowerShell execution to authorized scripts\n6. Disable PowerShell v2 (legacy version bypass)\n7. Monitor for suspicious PowerShell commands (encodedCommand, downloadString, etc.)",
+
+  "T1059.003": "**Command Shell Hardening:**\n1. Enable command-line process auditing (Event ID 4688)\n2. Use AppLocker to restrict cmd.exe execution\n3. Monitor for suspicious command-line patterns\n4. Restrict cmd.exe access to privileged users only",
+
+  "T1566.001": "**Email Security Hardening:**\n1. Block dangerous attachment types (.exe, .scr, .bat, .js, .vbs, macro-enabled Office docs)\n2. Enable Office macro execution warnings\n3. Disable macros in Office documents from internet sources\n4. Implement DMARC, SPF, and DKIM for email authentication\n5. Deploy email gateway with attachment sandboxing\n6. Conduct regular phishing simulation exercises",
+
+  "T1566.002": "**Phishing Link Protection:**\n1. Deploy DNS filtering to block malicious domains\n2. Implement web proxy with URL filtering\n3. Enable browser security features (SmartScreen, Safe Browsing)\n4. Use email security gateway with URL rewriting/sandboxing\n5. Train users on link verification techniques",
+
+  "T1071.001": "**C2 Communication Prevention:**\n1. Deploy network IDS/IPS to detect C2 patterns\n2. Implement SSL/TLS inspection for HTTPS traffic\n3. Block access to known malicious domains/IPs\n4. Monitor for beaconing behavior (regular periodic connections)\n5. Restrict outbound connections to only necessary destinations",
+
+  "T1486": "**Ransomware Protection:**\n1. Implement 3-2-1 backup strategy (3 copies, 2 different media, 1 offsite)\n2. Keep offline, encrypted backups that are air-gapped\n3. Test backup restoration procedures quarterly\n4. Enable Controlled Folder Access (Windows Defender)\n5. Deploy anti-ransomware endpoint protection\n6. Use file integrity monitoring to detect rapid encryption\n7. Restrict file system permissions (principle of least privilege)",
+
+  "T1055": "**Process Injection Prevention:**\n1. Deploy EDR solution that detects injection techniques\n2. Restrict SeDebugPrivilege to administrators only\n3. Enable Microsoft Defender Attack Surface Reduction rules\n4. Monitor for CreateRemoteThread, WriteProcessMemory APIs\n5. Use exploit protection features (CFG, DEP, ASLR)",
+
+  "T1027": "**Obfuscation Detection:**\n1. Deploy anti-malware with heuristic and behavior-based detection\n2. Monitor for file modifications and suspicious encodings\n3. Analyze scripts before execution (detonation chambers)\n4. Use YARA rules to detect obfuscation patterns",
+
+  "T1190": "**Application Security Hardening:**\n1. Keep all public-facing applications patched and updated\n2. Deploy Web Application Firewall (WAF) with OWASP rulesets\n3. Conduct regular vulnerability scans and penetration tests\n4. Implement input validation and output encoding\n5. Use secure coding practices (OWASP Top 10)\n6. Run applications with least privilege\n7. Enable exploit protection (DEP, ASLR, CFG)",
+
+  "T1078": "**Account Security Hardening:**\n1. Enforce multi-factor authentication (MFA) for all accounts\n2. Implement strong password policy (16+ characters, complexity)\n3. Use Privileged Access Management (PAM) for admin accounts\n4. Enable account lockout after failed login attempts\n5. Monitor for impossible travel and after-hours access\n6. Disable inactive accounts after 45 days\n7. Audit privileged account usage regularly",
+
+  "_default": "**General Hardening Guidance:**\n1. Apply security patches and updates promptly\n2. Implement defense-in-depth security controls\n3. Enable comprehensive logging and monitoring\n4. Conduct regular security assessments\n5. Follow vendor security best practices"
+}

@@ -1,0 +1,207 @@
+{
+  "T1059.001": [
+    {
+      "mitigation_id": "M1042",
+      "name": "Disable or Remove Feature or Program",
+      "description": "Consider disabling or restricting PowerShell where not required. Use PowerShell Constrained Language Mode to restrict capabilities."
+    },
+    {
+      "mitigation_id": "M1049",
+      "name": "Antivirus/Antimalware",
+      "description": "Anti-virus can be used to automatically quarantine suspicious files with PowerShell scripts."
+    },
+    {
+      "mitigation_id": "M1045",
+      "name": "Code Signing",
+      "description": "Set PowerShell execution policy to require signed scripts. Use AppLocker or Software Restriction Policies."
+    },
+    {
+      "mitigation_id": "M1026",
+      "name": "Privileged Account Management",
+      "description": "Remove PowerShell from systems where not required. Restrict PowerShell execution to privileged accounts only."
+    }
+  ],
+  "T1059.003": [
+    {
+      "mitigation_id": "M1038",
+      "name": "Execution Prevention",
+      "description": "Use application control to prevent execution of cmd.exe if not required. Block command-line interpreters through AppLocker."
+    },
+    {
+      "mitigation_id": "M1026",
+      "name": "Privileged Account Management",
+      "description": "Restrict cmd.exe execution to privileged accounts. Remove unnecessary access for standard users."
+    }
+  ],
+  "T1566.001": [
+    {
+      "mitigation_id": "M1049",
+      "name": "Antivirus/Antimalware",
+      "description": "Anti-virus can automatically quarantine malicious email attachments before delivery to users."
+    },
+    {
+      "mitigation_id": "M1031",
+      "name": "Network Intrusion Prevention",
+      "description": "Network intrusion prevention systems and email gateways can be used to detect and block malicious attachments."
+    },
+    {
+      "mitigation_id": "M1021",
+      "name": "Restrict Web-Based Content",
+      "description": "Block email attachments that can execute macros (e.g., .doc, .xls, .xlsm). Only allow safe file types."
+    },
+    {
+      "mitigation_id": "M1017",
+      "name": "User Training",
+      "description": "Train users to identify phishing emails and avoid opening suspicious attachments. Conduct regular phishing simulations."
+    }
+  ],
+  "T1566.002": [
+    {
+      "mitigation_id": "M1031",
+      "name": "Network Intrusion Prevention",
+      "description": "Network intrusion prevention systems can be used to block URLs associated with known malicious domains."
+    },
+    {
+      "mitigation_id": "M1021",
+      "name": "Restrict Web-Based Content",
+      "description": "Block access to known malicious web domains through DNS filtering and web proxies."
+    },
+    {
+      "mitigation_id": "M1017",
+      "name": "User Training",
+      "description": "Train users to identify phishing links. Teach verification techniques (hover before clicking, check sender)."
+    }
+  ],
+  "T1071.001": [
+    {
+      "mitigation_id": "M1031",
+      "name": "Network Intrusion Prevention",
+      "description": "Network intrusion detection and prevention systems can identify C2 traffic patterns. Use SSL/TLS inspection."
+    },
+    {
+      "mitigation_id": "M1037",
+      "name": "Filter Network Traffic",
+      "description": "Filter outbound web traffic through web proxies. Block access to known malicious domains and IP addresses."
+    }
+  ],
+  "T1486": [
+    {
+      "mitigation_id": "M1053",
+      "name": "Data Backup",
+      "description": "Maintain offline, encrypted backups of critical data. Test backup restoration regularly."
+    },
+    {
+      "mitigation_id": "M1040",
+      "name": "Behavior Prevention on Endpoint",
+      "description": "Use endpoint protection that can detect and block ransomware behavior (rapid file encryption)."
+    },
+    {
+      "mitigation_id": "M1022",
+      "name": "Restrict File and Directory Permissions",
+      "description": "Restrict write access to critical directories. Use least privilege principles for file access."
+    }
+  ],
+  "T1055": [
+    {
+      "mitigation_id": "M1040",
+      "name": "Behavior Prevention on Endpoint",
+      "description": "Use endpoint protection that can detect process injection techniques (memory writes, thread manipulation)."
+    },
+    {
+      "mitigation_id": "M1026",
+      "name": "Privileged Account Management",
+      "description": "Restrict debug privileges to administrators only. Minimize accounts with SeDebugPrivilege."
+    }
+  ],
+  "T1027": [
+    {
+      "mitigation_id": "M1049",
+      "name": "Antivirus/Antimalware",
+      "description": "Anti-malware can detect obfuscated code patterns and malicious packers."
+    },
+    {
+      "mitigation_id": "M1040",
+      "name": "Behavior Prevention on Endpoint",
+      "description": "Use endpoint protection that analyzes behavior rather than just signatures to detect obfuscated malware."
+    }
+  ],
+  "T1082": [
+    {
+      "mitigation_id": "M1028",
+      "name": "Operating System Configuration",
+      "description": "Restrict access to system information commands through application control policies."
+    }
+  ],
+  "T1083": [
+    {
+      "mitigation_id": "M1022",
+      "name": "Restrict File and Directory Permissions",
+      "description": "Use file system permissions to restrict access to sensitive directories."
+    }
+  ],
+  "T1087": [
+    {
+      "mitigation_id": "M1028",
+      "name": "Operating System Configuration",
+      "description": "Restrict access to account enumeration utilities through application control."
+    }
+  ],
+  "T1005": [
+    {
+      "mitigation_id": "M1022",
+      "name": "Restrict File and Directory Permissions",
+      "description": "Use file permissions to restrict access to sensitive data files."
+    },
+    {
+      "mitigation_id": "M1057",
+      "name": "Data Loss Prevention",
+      "description": "Implement DLP solutions to detect and block unauthorized data collection."
+    }
+  ],
+  "T1041": [
+    {
+      "mitigation_id": "M1031",
+      "name": "Network Intrusion Prevention",
+      "description": "Network monitoring can detect abnormal data flows and large outbound transfers."
+    },
+    {
+      "mitigation_id": "M1057",
+      "name": "Data Loss Prevention",
+      "description": "DLP solutions can detect and block data exfiltration attempts."
+    }
+  ],
+  "T1190": [
+    {
+      "mitigation_id": "M1050",
+      "name": "Exploit Protection",
+      "description": "Use exploit protection features like DEP, ASLR, and CFG. Deploy WAF for web applications."
+    },
+    {
+      "mitigation_id": "M1016",
+      "name": "Vulnerability Scanning",
+      "description": "Regularly scan public-facing applications for vulnerabilities and misconfigurations."
+    },
+    {
+      "mitigation_id": "M1026",
+      "name": "Privileged Account Management",
+      "description": "Run public-facing applications with minimal privileges. Use separate service accounts."
+    }
+  ],
+  "T1078": [
+    {
+      "mitigation_id": "M1027",
+      "name": "Password Policies",
+      "description": "Enforce strong password policies and multi-factor authentication for all accounts."
+    },
+    {
+      "mitigation_id": "M1026",
+      "name": "Privileged Account Management",
+      "description": "Implement privileged access management (PAM). Use just-in-time access provisioning."
+    },
+    {
+      "mitigation_id": "M1018",
+      "name": "User Account Management",
+      "description": "Regularly audit accounts and remove unused or dormant accounts."
+    }
+  ]
+}

@@ -5,9 +5,12 @@ Centralized configuration management for UTIP, including Phase 2.5 feature flags
 """
 
 import os
+import logging
 from typing import Optional
 from pydantic_settings import BaseSettings
-from pydantic import Field
+from pydantic import Field, field_validator, model_validator
+
+logger = logging.getLogger(__name__)
 
 
 class Settings(BaseSettings):
@@ -70,6 +73,65 @@ class Settings(BaseSettings):
     class Config:
         env_file = ".env"
         case_sensitive = False
+
+    @field_validator('secret_key')
+    @classmethod
+    def validate_secret_key(cls, v: str) -> str:
+        """
+        Validate secret key is not the default value and meets minimum length.
+
+        SECURITY: Prevents deployment with default/weak secrets.
+        """
+        if v == "change-me-in-production":
+            logger.warning(
+                "SECRET_KEY is set to default value. "
+                "This is acceptable for development but MUST be changed in production."
+            )
+        if len(v) < 32:
+            logger.warning(
+                f"SECRET_KEY is only {len(v)} characters. "
+                "Recommend at least 32 characters for production security."
+            )
+        return v
+
+    @field_validator('database_url')
+    @classmethod
+    def validate_database_url(cls, v: str) -> str:
+        """Validate database URL doesn't contain default credentials in suspicious contexts."""
+        if "utip_password" in v:
+            logger.warning(
+                "Database URL contains default password 'utip_password'. "
+                "Ensure this is changed in production."
+            )
+        return v
+
+    @model_validator(mode='after')
+    def validate_production_secrets(self) -> 'Settings':
+        """
+        Validate that production deployments don't use default secrets.
+
+        SECURITY: This is a hard block - production CANNOT start with default secrets.
+        """
+        if self.environment.lower() == "production":
+            errors = []
+
+            if self.secret_key == "change-me-in-production":
+                errors.append("SECRET_KEY must be changed from default in production")
+
+            if len(self.secret_key) < 32:
+                errors.append("SECRET_KEY must be at least 32 characters in production")
+
+            if "utip_password" in self.database_url:
+                errors.append("DATABASE_URL must not use default password in production")
+
+            if errors:
+                error_msg = "Production security validation failed:\n- " + "\n- ".join(errors)
+                logger.error(error_msg)
+                raise ValueError(error_msg)
+
+            logger.info("Production security validation passed")
+
+        return self
 
     def is_production(self) -> bool:
         """Check if running in production mode."""

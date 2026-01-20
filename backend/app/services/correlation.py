@@ -203,16 +203,16 @@ class CorrelationEngine:
         if not report_ids:
             return {}
 
-        # Convert list to SQL IN clause format
-        report_ids_str = ",".join([f"'{rid}'" for rid in report_ids])
-
+        # Use parameterized query to prevent SQL injection
+        # PostgreSQL ANY() accepts array parameters safely
         result = await db.execute(
-            text(f"""
+            text("""
                 SELECT technique_id, MAX(confidence) as max_confidence
                 FROM extracted_techniques
-                WHERE report_id IN ({report_ids_str})
+                WHERE report_id = ANY(:report_ids)
                 GROUP BY technique_id
-            """)
+            """),
+            {"report_ids": [str(rid) for rid in report_ids]}
         )
 
         techniques = {}
@@ -235,17 +235,17 @@ class CorrelationEngine:
         if not scan_ids:
             return {}
 
-        # Convert list to SQL IN clause format
-        scan_ids_str = ",".join([f"'{sid}'" for sid in scan_ids])
-
+        # Use parameterized query to prevent SQL injection
+        # PostgreSQL ANY() accepts array parameters safely
         result = await db.execute(
-            text(f"""
+            text("""
                 SELECT DISTINCT ct.technique_id, MAX(ct.confidence) as max_confidence
                 FROM cve_techniques ct
                 JOIN vulnerabilities v ON ct.cve_id = v.cve_id
-                WHERE v.scan_id IN ({scan_ids_str})
+                WHERE v.scan_id = ANY(:scan_ids)
                 GROUP BY ct.technique_id
-            """)
+            """),
+            {"scan_ids": [str(sid) for sid in scan_ids]}
         )
 
         techniques = {}

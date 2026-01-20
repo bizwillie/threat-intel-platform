@@ -17,6 +17,11 @@ Data Sources:
 Phase 2.5 Feature Flags:
     - All enhancements are OPTIONAL and configurable via environment variables
     - System gracefully degrades to core functionality if features are disabled
+
+SECURITY: NVD API protected with:
+    - Circuit breaker (prevents cascading failures)
+    - Rate limiting (prevents NVD API abuse)
+    - Bounded cache (prevents memory exhaustion)
 """
 
 import httpx
@@ -24,8 +29,9 @@ import logging
 from typing import List, Dict, Optional
 import asyncio
 from datetime import datetime, timedelta
-import json
+from cachetools import TTLCache
 from app.config import settings
+# Note: tenacity and circuitbreaker were removed - manual implementations are used instead
 from app.services.capec_mapper import CAPECMapper
 from app.services.attack_validator import ATTACKValidator
 from app.services.redis_cache import RedisCache
@@ -45,9 +51,16 @@ class CVEMapper:
     # NVD API endpoint
     NVD_API_BASE = "https://services.nvd.nist.gov/rest/json/cves/2.0"
 
-    # Cache for CVE lookups (in-memory for now, could move to Redis later)
-    _cve_cache: Dict[str, Dict] = {}
-    _cache_ttl = timedelta(days=7)
+    # SECURITY: Bounded cache to prevent memory exhaustion
+    # 10,000 items max, 7 day TTL (604800 seconds)
+    _cve_cache: TTLCache = TTLCache(maxsize=10000, ttl=604800)
+
+    # Rate limiting semaphore: max 5 concurrent NVD requests
+    _nvd_semaphore = asyncio.Semaphore(5)
+
+    # Circuit breaker state tracking
+    _circuit_failures = 0
+    _circuit_open_until: Optional[datetime] = None
 
     # Manual high-confidence mappings (curated)
     # Format: CVE-ID → [(technique_id, confidence, source)]
@@ -219,6 +232,11 @@ class CVEMapper:
         """
         Fetch CVE details from NIST NVD API (Phase 2.5: with Redis cache support).
 
+        SECURITY: Protected with:
+        - Circuit breaker (5 failures opens circuit for 60 seconds)
+        - Rate limiting (5 concurrent requests max, 200ms delay)
+        - Retry with exponential backoff (3 attempts)
+
         Returns:
             {
                 "cve_id": "CVE-2021-44228",
@@ -233,6 +251,11 @@ class CVEMapper:
             logger.debug(f"{cve_id}: NVD API disabled, returning empty CWE list")
             return {"cwes": []}
 
+        # SECURITY: Check circuit breaker state
+        if cls._circuit_open_until and datetime.now() < cls._circuit_open_until:
+            logger.warning(f"{cve_id}: Circuit breaker OPEN, returning empty CWE list")
+            return {"cwes": []}
+
         # Phase 2.5: Try Redis cache first (if enabled)
         cache_key = f"cve:{cve_id}"
         if settings.enable_redis_cache:
@@ -241,34 +264,94 @@ class CVEMapper:
                 logger.debug(f"{cve_id}: Using Redis cached data")
                 return cached_data
 
-        # Fallback to in-memory cache
+        # Fallback to in-memory cache (TTLCache handles expiration automatically)
         if cve_id in cls._cve_cache:
-            cached = cls._cve_cache[cve_id]
-            if datetime.now() - cached["cached_at"] < cls._cache_ttl:
-                logger.debug(f"{cve_id}: Using in-memory cached data")
-                return cached["data"]
+            logger.debug(f"{cve_id}: Using in-memory cached data")
+            return cls._cve_cache[cve_id]
 
-        # Fetch from NVD
+        # SECURITY: Rate limit NVD API requests
+        async with cls._nvd_semaphore:
+            # Add delay between requests to respect NVD rate limits
+            await asyncio.sleep(0.2)  # 200ms = max 5 req/sec
+
+            # Fetch from NVD with retry logic
+            nvd_data = await cls._fetch_nvd_with_retry(cve_id)
+
+        return nvd_data
+
+    @classmethod
+    async def _fetch_nvd_with_retry(cls, cve_id: str) -> Dict:
+        """
+        Fetch from NVD with retry and circuit breaker logic.
+
+        Retries up to 3 times with exponential backoff.
+        Opens circuit breaker after 5 consecutive failures.
+        """
         headers = {}
         if settings.nvd_api_key:
             headers["apiKey"] = settings.nvd_api_key
 
-        async with httpx.AsyncClient(timeout=settings.nvd_api_timeout) as client:
+        max_attempts = 3
+        for attempt in range(max_attempts):
             try:
-                response = await client.get(
-                    cls.NVD_API_BASE,
-                    params={"cveId": cve_id},
-                    headers=headers
-                )
-                response.raise_for_status()
-                nvd_data = response.json()
+                async with httpx.AsyncClient(timeout=settings.nvd_api_timeout) as client:
+                    response = await client.get(
+                        cls.NVD_API_BASE,
+                        params={"cveId": cve_id},
+                        headers=headers
+                    )
+                    response.raise_for_status()
+                    nvd_data = response.json()
+
+                # Success - reset circuit breaker
+                cls._circuit_failures = 0
+                cls._circuit_open_until = None
+
+                return await cls._parse_and_cache_nvd_response(cve_id, nvd_data)
+
             except httpx.HTTPStatusError as e:
                 if e.response.status_code == 404:
                     logger.warning(f"{cve_id}: Not found in NVD")
                     return {"cwes": []}
-                raise CVEMapperError(f"NVD API error: {e}")
+                elif e.response.status_code == 429:
+                    # Rate limited - back off
+                    wait_time = (2 ** attempt) * 2  # 2, 4, 8 seconds
+                    logger.warning(f"{cve_id}: NVD rate limited, waiting {wait_time}s (attempt {attempt + 1}/{max_attempts})")
+                    await asyncio.sleep(wait_time)
+                    continue
+                else:
+                    cls._record_circuit_failure()
+                    if attempt < max_attempts - 1:
+                        wait_time = (2 ** attempt)
+                        logger.warning(f"{cve_id}: NVD API error {e.response.status_code}, retrying in {wait_time}s")
+                        await asyncio.sleep(wait_time)
+                        continue
+                    raise CVEMapperError(f"NVD API error: {e}")
+
             except httpx.RequestError as e:
+                cls._record_circuit_failure()
+                if attempt < max_attempts - 1:
+                    wait_time = (2 ** attempt)
+                    logger.warning(f"{cve_id}: NVD request failed, retrying in {wait_time}s: {e}")
+                    await asyncio.sleep(wait_time)
+                    continue
                 raise CVEMapperError(f"NVD API request failed: {e}")
+
+        # All retries exhausted
+        return {"cwes": []}
+
+    @classmethod
+    def _record_circuit_failure(cls):
+        """Record a failure and potentially open the circuit breaker."""
+        cls._circuit_failures += 1
+        if cls._circuit_failures >= 5:
+            cls._circuit_open_until = datetime.now() + timedelta(seconds=60)
+            logger.error(f"Circuit breaker OPENED after {cls._circuit_failures} failures, will retry in 60s")
+
+    @classmethod
+    async def _parse_and_cache_nvd_response(cls, cve_id: str, nvd_data: Dict) -> Dict:
+        """Parse NVD response and cache the result."""
+        cache_key = f"cve:{cve_id}"
 
         # Parse NVD response
         try:
@@ -321,11 +404,8 @@ class CVEMapper:
             if settings.enable_redis_cache:
                 await RedisCache.set(cache_key, result, ttl_seconds=settings.nvd_api_cache_ttl)
 
-            # Always cache in memory as fallback
-            cls._cve_cache[cve_id] = {
-                "data": result,
-                "cached_at": datetime.now(),
-            }
+            # Always cache in memory as fallback (TTLCache handles expiration)
+            cls._cve_cache[cve_id] = result
 
             logger.info(f"{cve_id}: Fetched from NVD with {len(cwes)} CWEs")
             return result
@@ -408,6 +488,9 @@ class CVEMapper:
                     "has_api_key": settings.nvd_api_key is not None,
                     "cache_ttl_days": settings.nvd_api_cache_ttl / 86400,
                     "in_memory_cache_size": len(cls._cve_cache),
+                    "in_memory_cache_max": cls._cve_cache.maxsize,
+                    "circuit_breaker_open": cls._circuit_open_until is not None and datetime.now() < cls._circuit_open_until,
+                    "circuit_failures": cls._circuit_failures,
                 },
                 "redis_cache": await RedisCache.get_statistics(),
                 "capec_database": CAPECMapper.get_statistics(),

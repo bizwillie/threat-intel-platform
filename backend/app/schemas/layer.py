@@ -90,6 +90,15 @@ class Layer(BaseModel):
     created_at: datetime = Field(..., description="Creation timestamp")
 
 
+class LayerListResponse(BaseModel):
+    """Paginated list of layers."""
+
+    layers: List[Layer]
+    total: int
+    page: int = 1
+    size: int = 50
+
+
 class LayerTechnique(BaseModel):
     """Technique in a layer."""
 
