@@ -1,0 +1,57 @@
+# UTIP Worker Production Dockerfile
+# Multi-stage build for Celery workers
+
+# Stage 1: Build stage - install dependencies
+FROM python:3.11-slim AS builder
+
+WORKDIR /build
+
+# Install build dependencies
+RUN apt-get update && apt-get install -y \
+    gcc \
+    libpq-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create virtual environment
+RUN python -m venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+
+# Copy and install requirements
+COPY requirements.txt .
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir -r requirements.txt
+
+# Stage 2: Production runtime
+FROM python:3.11-slim AS runtime
+
+# Security: Create non-root user
+RUN groupadd -r utip && useradd -r -g utip utip
+
+WORKDIR /app
+
+# Install runtime dependencies only
+RUN apt-get update && apt-get install -y \
+    libpq5 \
+    && rm -rf /var/lib/apt/lists/* \
+    && apt-get clean
+
+# Copy virtual environment from builder
+COPY --from=builder /opt/venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+
+# Copy application code
+COPY --chown=utip:utip . .
+
+# Create upload directory with proper permissions
+RUN mkdir -p /app/uploads && chown -R utip:utip /app/uploads
+
+# Security: Switch to non-root user
+USER utip
+
+# Health check via celery inspect
+HEALTHCHECK --interval=60s --timeout=30s --start-period=30s --retries=3 \
+    CMD celery -A celery_app inspect ping -d celery@$HOSTNAME || exit 1
+
+# Run Celery worker with production settings
+# --concurrency controlled via environment or compose override
+CMD ["celery", "-A", "celery_app", "worker", "--loglevel=warning", "--queues=intel", "--concurrency=4"]

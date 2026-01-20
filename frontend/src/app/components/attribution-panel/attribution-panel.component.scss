@@ -135,6 +135,68 @@
   &:hover {
     border-color: var(--color-accent);
   }
+
+  /* High confidence pulse animation */
+  &.pulse-critical {
+    border-color: var(--color-danger);
+    background: rgba(239, 68, 68, 0.08);
+    animation: confidencePulse 2s ease-in-out infinite;
+    position: relative;
+
+    &::before {
+      content: '⚠️ HIGH CONFIDENCE';
+      position: absolute;
+      top: -10px;
+      right: var(--spacing-md);
+      background: var(--color-danger);
+      color: white;
+      font-size: 0.65rem;
+      font-weight: 700;
+      padding: 2px 8px;
+      border-radius: var(--radius-sm);
+      letter-spacing: 0.05em;
+      animation: badgePulse 2s ease-in-out infinite;
+    }
+
+    .actor-rank {
+      background: var(--color-danger);
+      animation: rankGlow 2s ease-in-out infinite;
+    }
+  }
+}
+
+/* Confidence pulse animation */
+@keyframes confidencePulse {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4);
+    border-color: var(--color-danger);
+  }
+  50% {
+    box-shadow: 0 0 0 8px rgba(239, 68, 68, 0);
+    border-color: rgba(239, 68, 68, 0.6);
+  }
+}
+
+/* Badge pulse */
+@keyframes badgePulse {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.8;
+    transform: scale(1.05);
+  }
+}
+
+/* Rank circle glow */
+@keyframes rankGlow {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.5);
+  }
+  50% {
+    box-shadow: 0 0 12px 4px rgba(239, 68, 68, 0.3);
+  }
 }
 
 .actor-rank {

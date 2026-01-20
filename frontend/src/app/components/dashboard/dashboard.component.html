@@ -15,11 +15,11 @@
         <span class="icon">🗺️</span>
         <span class="btn-label">Navigator</span>
       </button>
-      <button class="btn-icon" title="Upload Intel" disabled>
+      <button class="btn-icon" title="Upload Intel" (click)="uploadIntelReport()">
         <span class="icon">📄</span>
         <span class="btn-label">Intel</span>
       </button>
-      <button class="btn-icon" title="Upload Scan" disabled>
+      <button class="btn-icon" title="Upload Scan" (click)="uploadVulnScan()">
         <span class="icon">🔍</span>
         <span class="btn-label">Scans</span>
       </button>
@@ -31,6 +31,44 @@
 
   <!-- Main Content -->
   <div class="dashboard-content">
+    <!-- Quick Actions (FIRST - testing scroll) -->
+    <div class="quick-actions">
+      <h3>Quick Actions</h3>
+      <div class="actions-grid">
+        <button class="action-card glass-card" (click)="openNavigator()">
+          <div class="action-icon">🗺️</div>
+          <div class="action-title">Open Navigator</div>
+          <div class="action-description text-secondary">
+            View and analyze ATT&CK layers
+          </div>
+        </button>
+
+        <button class="action-card glass-card" disabled>
+          <div class="action-icon">➕</div>
+          <div class="action-title">Generate Layer</div>
+          <div class="action-description text-secondary">
+            Create new layer from intel and vulns
+          </div>
+        </button>
+
+        <button class="action-card glass-card" (click)="uploadIntelReport()">
+          <div class="action-icon">📄</div>
+          <div class="action-title">Upload Intel</div>
+          <div class="action-description text-secondary">
+            Upload threat intelligence reports
+          </div>
+        </button>
+
+        <button class="action-card glass-card" (click)="uploadVulnScan()">
+          <div class="action-icon">🔍</div>
+          <div class="action-title">Upload Scan</div>
+          <div class="action-description text-secondary">
+            Upload vulnerability scan results
+          </div>
+        </button>
+      </div>
+    </div>
+
     <!-- Welcome Section -->
     <div class="welcome-section glass-card">
       <h2>Welcome to UTIP</h2>
@@ -95,12 +133,10 @@
 
         <!-- Search and Filter Controls -->
         <div class="layers-controls" *ngIf="!loading && recentLayers.length > 0">
-          <input
-            type="search"
+          <app-search-input
             placeholder="Search layers..."
             [(ngModel)]="searchTerm"
-            class="search-input"
-          >
+          ></app-search-input>
           <select [(ngModel)]="filterBy" class="filter-select">
             <option value="all">All Layers</option>
             <option value="mine">My Layers</option>
@@ -146,11 +182,11 @@
         <h3>No Layers Yet</h3>
         <p class="text-secondary">Start by uploading threat intel and vulnerability scans</p>
         <div class="empty-actions">
-          <button class="btn-primary" disabled>
+          <button class="btn-primary" (click)="uploadIntelReport()">
             <span class="icon">📄</span>
             Upload Intel Report
           </button>
-          <button class="btn-secondary" disabled>
+          <button class="btn-secondary" (click)="uploadVulnScan()">
             <span class="icon">🔍</span>
             Upload Vuln Scan
           </button>
@@ -162,44 +198,6 @@
         <div class="empty-icon">🔍</div>
         <h3>No Matching Layers</h3>
         <p class="text-secondary">Try adjusting your search or filters</p>
-      </div>
-    </div>
-
-    <!-- Quick Actions -->
-    <div class="quick-actions">
-      <h3>Quick Actions</h3>
-      <div class="actions-grid">
-        <button class="action-card glass-card" (click)="openNavigator()">
-          <div class="action-icon">🗺️</div>
-          <div class="action-title">Open Navigator</div>
-          <div class="action-description text-secondary">
-            View and analyze ATT&CK layers
-          </div>
-        </button>
-
-        <button class="action-card glass-card" disabled>
-          <div class="action-icon">➕</div>
-          <div class="action-title">Generate Layer</div>
-          <div class="action-description text-secondary">
-            Create new layer from intel and vulns
-          </div>
-        </button>
-
-        <button class="action-card glass-card" disabled>
-          <div class="action-icon">📄</div>
-          <div class="action-title">Upload Intel</div>
-          <div class="action-description text-secondary">
-            Upload threat intelligence reports
-          </div>
-        </button>
-
-        <button class="action-card glass-card" disabled>
-          <div class="action-icon">🔍</div>
-          <div class="action-title">Upload Scan</div>
-          <div class="action-description text-secondary">
-            Upload vulnerability scan results
-          </div>
-        </button>
       </div>
     </div>
 

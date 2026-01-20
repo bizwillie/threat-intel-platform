@@ -1,0 +1,167 @@
+# UTIP Production Docker Compose
+# Usage: docker-compose -f docker-compose.prod.yml up -d
+#
+# Prerequisites:
+# 1. Generate SSL certificates and place in ./certs/:
+#    - cert.pem (certificate)
+#    - key.pem (private key)
+#    Or use Let's Encrypt with certbot
+#
+# 2. Create .env.prod file with production secrets
+#
+# 3. Configure DNS to point to this server
+
+services:
+  # PostgreSQL - System of Record
+  postgres:
+    image: postgres:15-alpine
+    container_name: utip-postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-utip}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD required}
+      POSTGRES_DB: ${POSTGRES_DB:-utip}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-utip}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - utip-internal
+    restart: unless-stopped
+
+  # Redis - Async Task Queue
+  redis:
+    image: redis:7-alpine
+    container_name: utip-redis
+    command: redis-server --requirepass ${REDIS_PASSWORD:?REDIS_PASSWORD required}
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - utip-internal
+    restart: unless-stopped
+
+  # Keycloak - Identity Provider
+  keycloak:
+    image: quay.io/keycloak/keycloak:23.0
+    container_name: utip-keycloak
+    environment:
+      KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN:-admin}
+      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:?KEYCLOAK_ADMIN_PASSWORD required}
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-utip}
+      KC_DB_USERNAME: ${POSTGRES_USER:-utip}
+      KC_DB_PASSWORD: ${POSTGRES_PASSWORD}
+      KC_HOSTNAME: ${KEYCLOAK_HOSTNAME:-auth.localhost}
+      KC_HOSTNAME_STRICT: "true"
+      KC_HTTP_ENABLED: "false"
+      KC_HTTPS_CERTIFICATE_FILE: /opt/keycloak/conf/cert.pem
+      KC_HTTPS_CERTIFICATE_KEY_FILE: /opt/keycloak/conf/key.pem
+      KC_PROXY: edge
+    command:
+      - start
+    ports:
+      - "8443:8443"
+    volumes:
+      - ./certs:/opt/keycloak/conf:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/localhost/8443 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 120s
+    networks:
+      - utip-internal
+    restart: unless-stopped
+
+  # Core API - "The Brain"
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.prod
+    container_name: utip-backend
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-utip}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-utip}
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
+      KEYCLOAK_URL: https://keycloak:8443
+      KEYCLOAK_REALM: ${KEYCLOAK_REALM:-utip}
+      KEYCLOAK_CLIENT_ID: ${KEYCLOAK_CLIENT_ID:-utip-api}
+      API_HOST: 0.0.0.0
+      API_PORT: 8000
+      ENVIRONMENT: production
+      DEBUG: "False"
+      UPLOAD_DIR: /app/uploads
+      SECRET_KEY: ${SECRET_KEY:?SECRET_KEY required}
+      CORS_ORIGINS: ${CORS_ORIGINS:-https://localhost}
+    volumes:
+      - upload-data:/app/uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      keycloak:
+        condition: service_healthy
+    networks:
+      - utip-internal
+    restart: unless-stopped
+
+  # Intel Worker - "The Hunter"
+  worker:
+    build:
+      context: ./worker
+      dockerfile: Dockerfile.prod
+    container_name: utip-worker
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-utip}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-utip}
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
+      UPLOAD_DIR: /app/uploads
+    volumes:
+      - upload-data:/app/uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: celery -A celery_app worker --loglevel=warning --queues=intel --concurrency=4
+    networks:
+      - utip-internal
+    restart: unless-stopped
+
+  # Frontend - Angular SPA with TLS
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.prod
+    container_name: utip-frontend
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./certs:/etc/nginx/ssl:ro
+    depends_on:
+      - backend
+    networks:
+      - utip-internal
+      - utip-external
+    restart: unless-stopped
+
+volumes:
+  postgres-data:
+    driver: local
+  upload-data:
+    driver: local
+
+networks:
+  utip-internal:
+    driver: bridge
+    internal: true
+  utip-external:
+    driver: bridge

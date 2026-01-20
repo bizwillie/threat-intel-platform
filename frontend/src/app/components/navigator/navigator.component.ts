@@ -16,6 +16,7 @@ import { AuthService } from '../../services/auth.service';
 import { ApiService, LayerDetail } from '../../services/api.service';
 import { AttributionPanelComponent } from '../attribution-panel/attribution-panel.component';
 import { RemediationSidebarComponent } from '../remediation-sidebar/remediation-sidebar.component';
+import { TacticMatrixComponent } from './tactic-matrix/tactic-matrix.component';
 
 @Component({
   selector: 'app-navigator',
@@ -23,7 +24,8 @@ import { RemediationSidebarComponent } from '../remediation-sidebar/remediation-
   imports: [
     CommonModule,
     AttributionPanelComponent,
-    RemediationSidebarComponent
+    RemediationSidebarComponent,
+    TacticMatrixComponent
   ],
   templateUrl: './navigator.component.html',
   styleUrls: ['./navigator.component.scss']

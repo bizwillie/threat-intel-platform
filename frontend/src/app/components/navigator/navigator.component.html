@@ -68,35 +68,13 @@
         <p>Loading layer data...</p>
       </div>
 
-      <!-- Technique List (Temporary visualization until Navigator integration) -->
-      <div class="technique-list" *ngIf="!loading && currentLayer">
-        <h3>Layer Techniques</h3>
-        <div
-          *ngFor="let technique of currentLayer.techniques"
-          class="technique-card"
-          [style.border-left-color]="technique.color"
-          (click)="onTechniqueSelected(technique.technique_id)"
-        >
-          <div class="technique-header">
-            <span class="technique-id font-mono">{{ technique.technique_id }}</span>
-            <span
-              class="technique-badge"
-              [ngClass]="{
-                'badge-red': technique.color === '#EF4444',
-                'badge-yellow': technique.color === '#F59E0B',
-                'badge-blue': technique.color === '#3B82F6'
-              }"
-            >
-              <span *ngIf="technique.from_intel && technique.from_vuln">CRITICAL</span>
-              <span *ngIf="technique.from_intel && !technique.from_vuln">INTEL</span>
-              <span *ngIf="!technique.from_intel && technique.from_vuln">VULN</span>
-            </span>
-          </div>
-          <div class="technique-meta">
-            <span class="confidence">Confidence: {{ (technique.confidence * 100).toFixed(0) }}%</span>
-          </div>
-        </div>
-      </div>
+      <!-- Tactic Matrix View - Techniques grouped by MITRE Tactic -->
+      <app-tactic-matrix
+        *ngIf="!loading && currentLayer"
+        [techniques]="currentLayer.techniques"
+        [selectedTechniqueId]="selectedTechniqueId"
+        (techniqueSelected)="onTechniqueSelected($event)"
+      ></app-tactic-matrix>
 
       <div class="error-message" *ngIf="error">
         {{ error }}

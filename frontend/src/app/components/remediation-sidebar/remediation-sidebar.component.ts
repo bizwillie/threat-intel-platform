@@ -13,6 +13,8 @@ import { CommonModule } from '@angular/common';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { ApiService, TechniqueRemediation } from '../../services/api.service';
 
+export type RemediationTab = 'mitigations' | 'detection' | 'hardening';
+
 @Component({
   selector: 'app-remediation-sidebar',
   standalone: true,
@@ -30,6 +32,27 @@ export class RemediationSidebarComponent implements OnInit, OnChanges {
   remediation: TechniqueRemediation | null = null;
   loading = false;
   error = '';
+
+  // Tab state
+  activeTab: RemediationTab = 'mitigations';
+
+  // Tab definitions with counts
+  get tabs() {
+    const mitigationCount = (this.remediation?.mitigations?.length || 0) +
+                            (this.remediation?.cis_controls?.length || 0);
+    const detectionCount = this.remediation?.detection_rules?.length || 0;
+    const hardeningCount = this.remediation?.hardening_guidance ? 1 : 0;
+
+    return [
+      { id: 'mitigations' as RemediationTab, label: 'Mitigations', icon: '🛡️', count: mitigationCount },
+      { id: 'detection' as RemediationTab, label: 'Detection', icon: '🔍', count: detectionCount },
+      { id: 'hardening' as RemediationTab, label: 'Hardening', icon: '🔒', count: hardeningCount }
+    ];
+  }
+
+  setActiveTab(tab: RemediationTab): void {
+    this.activeTab = tab;
+  }
 
   ngOnInit(): void {
     this.loadRemediation();

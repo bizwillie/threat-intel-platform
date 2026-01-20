@@ -4,21 +4,21 @@
 
 import { Component } from '@angular/core';
 import { RouterOutlet } from '@angular/router';
+import { ToastComponent } from './components/shared/toast/toast.component';
+import { ScrollToTopComponent } from './components/shared/scroll-to-top/scroll-to-top.component';
 
 @Component({
   selector: 'app-root',
   standalone: true,
-  imports: [RouterOutlet],
+  imports: [RouterOutlet, ToastComponent, ScrollToTopComponent],
   template: `
-    <div class="app-container">
-      <router-outlet></router-outlet>
-    </div>
+    <router-outlet></router-outlet>
+    <app-toast></app-toast>
+    <app-scroll-to-top></app-scroll-to-top>
   `,
   styles: [`
-    .app-container {
-      width: 100%;
-      height: 100vh;
-      overflow: hidden;
+    :host {
+      display: block;
     }
   `]
 })

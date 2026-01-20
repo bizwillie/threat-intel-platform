@@ -10,19 +10,22 @@ import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { AuthService } from '../../services/auth.service';
 import { ApiService } from '../../services/api.service';
+import { ToastService } from '../../services/toast.service';
 import { SkeletonLoaderComponent } from '../shared/skeleton-loader.component';
+import { SearchInputComponent } from '../shared/search-input/search-input.component';
 import { firstValueFrom } from 'rxjs';
 
 @Component({
   selector: 'app-dashboard',
   standalone: true,
-  imports: [CommonModule, FormsModule, SkeletonLoaderComponent],
+  imports: [CommonModule, FormsModule, SkeletonLoaderComponent, SearchInputComponent],
   templateUrl: './dashboard.component.html',
   styleUrls: ['./dashboard.component.scss']
 })
 export class DashboardComponent implements OnInit {
   private authService = inject(AuthService);
   private apiService = inject(ApiService);
+  private toastService = inject(ToastService);
   private router = inject(Router);
 
   currentUser$ = this.authService.currentUser$;
@@ -156,5 +159,77 @@ export class DashboardComponent implements OnInit {
   logout(): void {
     this.authService.logout();
     this.router.navigate(['/login']);
+  }
+
+  /**
+   * Trigger file selection for Intel Report upload
+   */
+  uploadIntelReport(): void {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.pdf,.json,.stix,.stix2,.txt';
+    input.onchange = (event: Event) => {
+      const file = (event.target as HTMLInputElement).files?.[0];
+      if (file) {
+        this.processIntelUpload(file);
+      }
+    };
+    input.click();
+  }
+
+  /**
+   * Process Intel Report file upload
+   */
+  private async processIntelUpload(file: File): Promise<void> {
+    this.toastService.info(`Uploading ${file.name}...`);
+
+    try {
+      const response = await firstValueFrom(this.apiService.uploadIntelReport(file));
+      this.toastService.success(`Intel report uploaded successfully. Processing...`);
+
+      // Refresh dashboard data to show new report
+      await this.loadDashboardData();
+    } catch (error: any) {
+      console.error('Failed to upload intel report:', error);
+      const message = error?.error?.detail || error?.message || 'Failed to upload intel report';
+      this.toastService.error(message);
+    }
+  }
+
+  /**
+   * Trigger file selection for Vulnerability Scan upload
+   */
+  uploadVulnScan(): void {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.nessus';
+    input.onchange = (event: Event) => {
+      const file = (event.target as HTMLInputElement).files?.[0];
+      if (file) {
+        this.processVulnUpload(file);
+      }
+    };
+    input.click();
+  }
+
+  /**
+   * Process Vulnerability Scan file upload
+   */
+  private async processVulnUpload(file: File): Promise<void> {
+    this.toastService.info(`Uploading ${file.name}...`);
+
+    try {
+      const response = await firstValueFrom(this.apiService.uploadVulnerabilityScan(file));
+      this.toastService.success(
+        `Scan uploaded: ${response.vulnerabilities_found} vulnerabilities found`
+      );
+
+      // Refresh dashboard data to show new scan
+      await this.loadDashboardData();
+    } catch (error: any) {
+      console.error('Failed to upload vulnerability scan:', error);
+      const message = error?.error?.detail || error?.message || 'Failed to upload vulnerability scan';
+      this.toastService.error(message);
+    }
   }
 }
