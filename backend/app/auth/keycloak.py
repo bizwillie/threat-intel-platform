@@ -29,6 +29,9 @@ logger = logging.getLogger(__name__)
 # Security scheme
 security = HTTPBearer(auto_error=False)  # Don't auto-error for optional auth
 
+# Development mode - bypass authentication
+AUTH_DISABLED = os.getenv("AUTH_DISABLED", "false").lower() == "true"
+
 # Keycloak configuration from environment
 KEYCLOAK_URL = os.getenv("KEYCLOAK_URL", "http://keycloak:8080")
 KEYCLOAK_REALM = os.getenv("KEYCLOAK_REALM", "utip")
@@ -166,6 +169,16 @@ async def get_current_user(
     Raises:
         HTTPException: If token is invalid or missing
     """
+    # Development mode bypass
+    if AUTH_DISABLED:
+        logger.warning("AUTH_DISABLED: Returning mock dev user")
+        return User(
+            username="dev-user",
+            email="dev@localhost",
+            roles=["analyst", "admin", "hunter"],
+            user_id="dev-user-id"
+        )
+
     if not credentials:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -225,12 +238,23 @@ async def get_current_user_optional(
 
     Use this for GET endpoints that should work without authentication (showing empty data).
 
+    When AUTH_DISABLED=true, returns a mock dev user instead of None.
+
     Usage:
         @app.get("/api/data")
         async def get_data(user: Optional[User] = Depends(get_current_user_optional)):
             # Works with or without auth
             return {"data": []}
     """
+    # Development mode bypass - return mock user
+    if AUTH_DISABLED:
+        return User(
+            username="dev-user",
+            email="dev@localhost",
+            roles=["analyst", "admin", "hunter"],
+            user_id="dev-user-id"
+        )
+
     if not credentials:
         logger.debug("No credentials provided - returning None user")
         return None

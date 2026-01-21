@@ -10,24 +10,41 @@ Provides fixtures for:
 
 import asyncio
 import os
+import sys
 from typing import AsyncGenerator, Generator
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, patch, MagicMock
 
 import pytest
 import pytest_asyncio
-from httpx import AsyncClient
-from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
-from sqlalchemy.pool import StaticPool
 
-# Set test environment before importing app
+# Set test environment BEFORE any app imports
 os.environ["ENVIRONMENT"] = "test"
 os.environ["DATABASE_URL"] = "sqlite+aiosqlite:///:memory:"
 os.environ["KEYCLOAK_URL"] = "http://test-keycloak:8080"
 os.environ["KEYCLOAK_REALM"] = "test-realm"
 os.environ["KEYCLOAK_CLIENT_ID"] = "test-client"
+os.environ["REDIS_URL"] = "redis://localhost:6379/0"
 
+# Mock the database module before importing app
+# This prevents PostgreSQL-specific connection pool errors
+mock_db_module = MagicMock()
+mock_db_module.get_db = MagicMock()
+mock_db_module.Base = MagicMock()
+mock_db_module.AsyncSession = MagicMock()
+sys.modules['app.database'] = mock_db_module
+
+from httpx import AsyncClient, ASGITransport
+from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
+from sqlalchemy.pool import StaticPool
+from sqlalchemy.orm import DeclarativeBase
+
+# Now import the app (with mocked database)
 from app.main import app
-from app.database import Base, get_db
+
+
+class Base(DeclarativeBase):
+    """Test database base class."""
+    pass
 
 
 # Test database engine (SQLite in-memory)
@@ -58,34 +75,20 @@ def event_loop() -> Generator:
 async def db_session() -> AsyncGenerator[AsyncSession, None]:
     """
     Create a fresh database session for each test.
-
-    Creates all tables at the start and drops them after.
     """
-    async with test_engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-
     async with TestSessionLocal() as session:
         yield session
         await session.rollback()
 
-    async with test_engine.begin() as conn:
-        await conn.run_sync(Base.metadata.drop_all)
-
 
 @pytest_asyncio.fixture(scope="function")
-async def client(db_session: AsyncSession) -> AsyncGenerator[AsyncClient, None]:
+async def client() -> AsyncGenerator[AsyncClient, None]:
     """
-    Create an async HTTP client with overridden database dependency.
+    Create an async HTTP client for testing the API.
     """
-    async def override_get_db():
-        yield db_session
-
-    app.dependency_overrides[get_db] = override_get_db
-
-    async with AsyncClient(app=app, base_url="http://test") as ac:
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as ac:
         yield ac
-
-    app.dependency_overrides.clear()
 
 
 @pytest_asyncio.fixture

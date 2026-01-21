@@ -36,7 +36,20 @@ export class AuthService {
   private currentUserSubject = new BehaviorSubject<User | null>(null);
   public currentUser$ = this.currentUserSubject.asObservable();
 
+  // Check if auth is disabled (for simplified docker setup)
+  private readonly authDisabled = (environment as any).authDisabled ?? false;
+
   constructor(private http: HttpClient) {
+    // If auth is disabled, set a mock dev user
+    if (this.authDisabled) {
+      this.currentUserSubject.next({
+        username: 'dev-user',
+        email: 'dev@localhost',
+        roles: ['analyst', 'admin', 'hunter']
+      });
+      return;
+    }
+
     // Check for existing token on initialization
     if (this.getAccessToken()) {
       this.loadUserInfo();
@@ -104,6 +117,11 @@ export class AuthService {
    * Check if user is authenticated
    */
   isAuthenticated(): boolean {
+    // Always authenticated when auth is disabled
+    if (this.authDisabled) {
+      return true;
+    }
+
     const token = this.getAccessToken();
     if (!token) {
       return false;

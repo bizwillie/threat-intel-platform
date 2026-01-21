@@ -11,6 +11,7 @@ attackers to read arbitrary files from the server.
 
 from defusedxml import ElementTree as ET
 from defusedxml.ElementTree import ParseError
+from xml.etree.ElementTree import Element  # Type hint only - parsing uses defusedxml
 from typing import List, Dict, Optional
 from datetime import datetime
 import logging
@@ -77,7 +78,7 @@ class NessusParser:
         }
 
     @staticmethod
-    def _extract_metadata(root: ET.Element, filename: str) -> Dict:
+    def _extract_metadata(root: Element, filename: str) -> Dict:
         """Extract scan-level metadata."""
         metadata = {
             "scan_date": None,
@@ -110,7 +111,7 @@ class NessusParser:
         return metadata
 
     @staticmethod
-    def _extract_vulnerabilities(root: ET.Element) -> List[Dict]:
+    def _extract_vulnerabilities(root: Element) -> List[Dict]:
         """Extract vulnerability findings from all hosts."""
         vulnerabilities = []
 

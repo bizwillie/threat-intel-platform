@@ -8,4 +8,6 @@ export const environment = {
   keycloakUrl: '/auth',  // Proxied through Nginx
   keycloakRealm: 'utip',
   keycloakClientId: 'utip-frontend',
+  // Set to true to bypass authentication (backend must have AUTH_DISABLED=true)
+  authDisabled: false,
 };

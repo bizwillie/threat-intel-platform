@@ -179,9 +179,11 @@ export class ApiService {
    * Get all layers
    */
   getLayers(): Observable<Layer[]> {
-    return this.http.get<Layer[]>(`${this.apiUrl}/layers`, {
-      headers: this.getAuthHeaders()
-    }).pipe(
+    return this.http.get<{ layers: Layer[]; total: number; page: number; size: number }>(
+      `${this.apiUrl}/layers`,
+      { headers: this.getAuthHeaders() }
+    ).pipe(
+      map(response => response.layers || []),
       catchError(this.handleError)
     );
   }
@@ -251,9 +253,11 @@ export class ApiService {
    * Get all threat reports
    */
   getThreatReports(): Observable<ThreatReport[]> {
-    return this.http.get<ThreatReport[]>(`${this.apiUrl}/intel/reports`, {
-      headers: this.getAuthHeaders()
-    }).pipe(
+    return this.http.get<{ reports: ThreatReport[]; total: number; page: number; size: number }>(
+      `${this.apiUrl}/intel/reports`,
+      { headers: this.getAuthHeaders() }
+    ).pipe(
+      map(response => response.reports || []),
       catchError(this.handleError)
     );
   }
@@ -300,9 +304,11 @@ export class ApiService {
    * Get all vulnerability scans
    */
   getVulnerabilityScans(): Observable<VulnerabilityScan[]> {
-    return this.http.get<VulnerabilityScan[]>(`${this.apiUrl}/vuln/scans`, {
-      headers: this.getAuthHeaders()
-    }).pipe(
+    return this.http.get<{ scans: VulnerabilityScan[]; total: number; page: number; size: number }>(
+      `${this.apiUrl}/vuln/scans`,
+      { headers: this.getAuthHeaders() }
+    ).pipe(
+      map(response => response.scans || []),
       catchError(this.handleError)
     );
   }

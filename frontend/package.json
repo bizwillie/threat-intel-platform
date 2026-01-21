@@ -7,6 +7,7 @@
     "start": "ng serve --host 0.0.0.0 --port 4200",
     "build": "ng build",
     "build:prod": "ng build --configuration production",
+    "build:simple": "ng build --configuration simple",
     "watch": "ng build --watch --configuration development",
     "test": "ng test",
     "lint": "ng lint"
